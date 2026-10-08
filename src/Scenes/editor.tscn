@@ -1,0 +1,202 @@
+[gd_scene load_steps=17 format=3 uid="uid://bj6s526sep4xw"]
+
+[ext_resource type="Script" path="res://Scripts/file_manager.gd" id="1_x00ag"]
+[ext_resource type="Script" path="res://Scripts/settings.gd" id="2_7x3ll"]
+[ext_resource type="Theme" uid="uid://daiset8sjhqyc" path="res://theme.tres" id="2_bh428"]
+[ext_resource type="PackedScene" uid="uid://dk43uvvc3j228" path="res://Scenes/settings_list.tscn" id="5_6usn0"]
+[ext_resource type="Script" path="res://Scripts/file_dialog.gd" id="5_bhd70"]
+[ext_resource type="PackedScene" uid="uid://c2gyvklbna1ss" path="res://Scenes/theme_chooser.tscn" id="6_10xx2"]
+[ext_resource type="Script" path="res://Scripts/theme_chooser.gd" id="9_ba634"]
+[ext_resource type="Script" path="res://Scripts/hyperlink.gd" id="11_m1mse"]
+[ext_resource type="Script" path="res://Scripts/camera.gd" id="12_x8fwh"]
+[ext_resource type="PackedScene" uid="uid://bjnhor4pywtgc" path="res://Scenes/comments.tscn" id="14_r0w3a"]
+[ext_resource type="AudioStream" uid="uid://bw4elmrq7utxl" path="res://Music/ES_Social Feedia - Heyson.wav" id="14_tdfqv"]
+
+[sub_resource type="Environment" id="Environment_7g1iw"]
+background_mode = 3
+glow_enabled = true
+glow_blend_mode = 0
+glow_hdr_threshold = 0.0
+
+[sub_resource type="CodeHighlighter" id="CodeHighlighter_p2au2"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_elmks"]
+
+[sub_resource type="Curve2D" id="Curve2D_stitx"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wbxv0"]
+
+[node name="Editor" type="Node2D"]
+script = ExtResource("1_x00ag")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_7g1iw")
+
+[node name="BackgroundCanvas" type="CanvasLayer" parent="."]
+layer = -100
+
+[node name="ExternalBackground" type="ColorRect" parent="BackgroundCanvas"]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Code" type="CodeEdit" parent="."]
+unique_name_in_owner = true
+offset_right = 2044.0
+offset_bottom = 44630.0
+theme = ExtResource("2_bh428")
+theme_override_colors/background_color = Color(0, 0, 0, 1)
+theme_override_colors/current_line_color = Color(0.168627, 0.168627, 0.168627, 1)
+theme_override_colors/caret_color = Color(0.321569, 0.545098, 1, 1)
+theme_override_font_sizes/font_size = 0
+text = ""
+context_menu_enabled = false
+scroll_smooth = true
+scroll_v_scroll_speed = 150.0
+scroll_fit_content_height = true
+minimap_draw = true
+caret_blink = true
+syntax_highlighter = SubResource("CodeHighlighter_p2au2")
+highlight_all_occurrences = true
+highlight_current_line = true
+draw_tabs = true
+gutters_draw_line_numbers = true
+code_completion_enabled = false
+indent_automatic = false
+auto_brace_completion_enabled = false
+auto_brace_completion_highlight_matching = true
+script = ExtResource("2_7x3ll")
+
+[node name="Background" type="ColorRect" parent="."]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+offset_left = -368.0
+offset_top = -207.0
+offset_right = 2263.0
+offset_bottom = 1342.0
+
+[node name="FileDialog" type="RichTextLabel" parent="."]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_elmks")
+anchors_preset = 0
+offset_left = -492.0
+offset_top = 119.0
+offset_right = -30.0
+offset_bottom = 699.0
+grow_horizontal = 2
+grow_vertical = 0
+theme = ExtResource("2_bh428")
+text = ""
+autowrap_mode = 0
+script = ExtResource("5_bhd70")
+
+[node name="AutoSaveTimer" type="Timer" parent="."]
+wait_time = 5.0
+autostart = true
+
+[node name="Settings" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="SettingsList" parent="Settings" instance=ExtResource("5_6usn0")]
+unique_name_in_owner = true
+offset_left = -121.31
+offset_top = 13.0
+offset_right = 41.37
+offset_bottom = 55.665
+metadata/_edit_use_anchors_ = true
+
+[node name="ThemePicker" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="ThemeChooser" parent="ThemePicker" instance=ExtResource("6_10xx2")]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+offset_left = -750.0
+offset_top = 17.0
+offset_right = -718.0
+offset_bottom = 37.0
+script = ExtResource("9_ba634")
+
+[node name="Info" type="Node2D" parent="."]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+position = Vector2(-1691.12, 0)
+
+[node name="RichTextLabel" type="RichTextLabel" parent="Info"]
+offset_left = 285.0
+offset_top = 28.0
+offset_right = 4821.0
+offset_bottom = 1219.0
+scale = Vector2(0.235, 0.235)
+theme = ExtResource("2_bh428")
+theme_override_font_sizes/normal_font_size = 376
+bbcode_enabled = true
+text = "[color=#c9daf8]Griddy[/color][color=#85c6ff]Translate[/color]"
+
+[node name="RichTextLabel2" type="RichTextLabel" parent="Info"]
+offset_left = 293.0
+offset_top = 165.0
+offset_right = 6395.0
+offset_bottom = 4616.0
+scale = Vector2(0.235, 0.235)
+theme = ExtResource("2_bh428")
+theme_override_font_sizes/normal_font_size = 121
+bbcode_enabled = true
+text = "GriddyTranslate\n\nCTRL + ENTER  - translate / retry\nCTRL + TAB    - original / translation\nCTRL + O / L  - language picker\nCTRL + ,      - settings\nCTRL + T      - theme picker\nCTRL + I      - this panel\nCTRL + SHIFT + C - copy translation\nCTRL + SHIFT + X - swap languages\nCTRL + N      - clear\nCTRL + PLUS / MINUS - zoom\nCTRL + 0      - reset zoom\nF11           - fullscreen\nESC           - close panel / return to original\n\nYoudao / MyMemory online translation and real dictionary examples.\nSelect source, display layout, motion and animation speed in settings.\nTheme and rendering based on GriddyCode by Face & contributors."
+script = ExtResource("11_m1mse")
+
+[node name="Misc" type="Node2D" parent="."]
+
+[node name="Cam" type="Camera2D" parent="Misc"]
+unique_name_in_owner = true
+position = Vector2(92, 48)
+zoom = Vector2(10, 10)
+script = ExtResource("12_x8fwh")
+
+[node name="Path2D" type="Path2D" parent="."]
+curve = SubResource("Curve2D_stitx")
+
+[node name="PathFollow2D" type="PathFollow2D" parent="Path2D"]
+
+[node name="ShaderLayer" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+material = SubResource("ShaderMaterial_wbxv0")
+offset_left = -2011.0
+offset_top = -700.0
+offset_right = 4408.0
+offset_bottom = 5193.0
+mouse_filter = 2
+color = Color(0.46455, 0.475028, 0.740924, 1)
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("14_tdfqv")
+
+[node name="AudioTimer" type="Timer" parent="."]
+wait_time = 0.5
+
+[node name="Comments" parent="." instance=ExtResource("14_r0w3a")]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0)
+offset_left = 772.0
+offset_top = 2.0
+offset_right = 772.0
+offset_bottom = 2.0
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+offset = Vector2(100, 129.5)
+transform = Transform2D(1, 0, 0, 1, 100, 129.5)
+
+[connection signal="caret_changed" from="Code" to="Code" method="_on_caret_changed"]
+[connection signal="code_completion_requested" from="Code" to="Code" method="_on_code_completion_requested"]
+[connection signal="gui_input" from="Code" to="Code" method="_on_gui_input"]
+[connection signal="text_changed" from="Code" to="Code" method="_on_text_changed"]
+[connection signal="ui_close" from="FileDialog" to="Code" method="_on_file_dialog_ui_close"]
+[connection signal="timeout" from="AutoSaveTimer" to="." method="_on_auto_save_timer_timeout"]
+[connection signal="item_focused" from="ThemePicker/ThemeChooser" to="." method="_on_theme_chooser_item_focused"]
+[connection signal="item_selected" from="ThemePicker/ThemeChooser" to="." method="_on_theme_chooser_item_selected"]

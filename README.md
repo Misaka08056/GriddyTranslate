@@ -1,112 +1,54 @@
-# GriddyCode
-Coding has never been more lit!
+# GriddyTranslate
 
+把 GriddyCode 的文字画布改成翻译器：保留泛光、字体、镜头聚焦和滑入设置，通过快捷键操作，打开即可输入。
 
-https://github.com/face-hh/griddycode/assets/69168154/df93830e-6e24-472d-a854-cea026b12890
+A keyboard-first translator forked from [GriddyCode](https://github.com/face-hh/griddycode), retaining its canvas, glow, animated panels and camera focus. Windows portable app with Youdao and MyMemory.
 
-P.S. Press `CTRL` + `I` for a quick introduction in the Editor :)
+## 下载与运行
 
+前往 [Releases](https://github.com/Misaka08056/GriddyTranslate/releases/latest)，下载 **GriddyTranslate-Windows.zip**，解压整个文件夹，再双击 **GriddyTranslate.exe**。
 
-# Table of Contents
-   - [Requirements](#requirements)
-   - [Lua modding](#%EF%B8%8F-lua-modding)
-	  - [Where?](#where)
-	  - [How?](#how)
-	  - [Docs](#docs)
-		 - [Langs](#langs)
-			- [Introduction](#introduction)
-			- [Methods](#methods)
-		 - [Themes](#themes)
-			- [Introduction](#introduction-1)
-			- [Methods](#methods-1)
-	  - [Publishing](#publishing)
-   - [Contributions](#contributions)
-	  - [Current bugs/needed features](#-current-bugsneeded-features)
-	  	- [HIGH PRIORITY](#high-priority)
-		- [MEDIUM PRIORITY](#medium-priority)
-		- [LOW PRIORITY](#low-priority)
+无需安装 GriddyCode、Godot、Python 或 Codex。需要 Windows 10/11 64 位、支持 Vulkan 的显卡及正常驱动；翻译和例句需要联网。运行时、资源包和 Lua DLL 必须与启动器放在同一目录。
 
-# Requirements
-| Requirement | Notes |
-| -------- | -------- |
-| [Nerdfont](https://www.nerdfonts.com/) - we use Nerdfont for the file picker. | You'll know it's missing when your icons look like "□" |
-| [Linux](https://en.wikipedia.org/wiki/List_of_Linux_distributions) - GriddyCode is tested **mainly** on Linux | No, macOS won't be supported. Gaming OS works. |
+## 操作
 
-# ⌨️ Lua modding
-GriddyCode allows you to extend its functionality via **Lua**.
+| 快捷键 | 作用 |
+| --- | --- |
+| Ctrl + Enter | 翻译 |
+| Ctrl + Tab | 原文 / 译文切换 |
+| Ctrl + , | 设置 |
+| Ctrl + O / Ctrl + L | 选择语言 |
+| Ctrl + T | 选择主题 |
+| Ctrl + Shift + C | 复制译文 |
+| Ctrl + 加号 / 减号 / 0 | 放大 / 缩小 / 恢复缩放 |
+| F11 | 全屏 / 窗口切换 |
+| Esc | 收起面板 / 返回原文 |
 
-## Where?
-To open the folder with Lua scripts, go to:
+设置包含有道与 MyMemory 翻译来源、英译中例句、原文保留与下一行译文、泛光与 Shader、屏幕晃动、动画速度、缩放和全屏。
 
-- Windows: `%APPDATA%\Godot\app_userdata\Bussin GriddyCode`
-- macOS: `~/Library/Application Support/Bussin GriddyCode`
-- Linux: `~/.local/share/godot/app_userdata/Bussin GriddyCode`
+例句查询保留完整单词或短语，只显示包含对应词或完整短语的真实词典例句；长句与没有完整词条的输入不显示例句。例句先以乱码逐字出现，再恢复为英文和中文。语言列表按内容居中，并适配窗口与全屏。
 
-*Note: the paths are not accurate, we recommend you manually search for GriddyCode in the AppData of your OS.*
+![语言选择界面](docs/screenshots/languages.png)
 
-## How?
-You may see the folders **"langs"** and **"themes"**.
-- **"langs"** holds a bunch of `.lua` files that power GriddyCode's syntax highlighting & autocomplete.
-- **"themes"** holds a bunch of `.lua` files that change GriddyCode's appearance.
+详细操作见 [使用说明](src/使用说明.md)，已知问题的原因与修复见 [修复说明](docs/修复说明.md)。
 
-*Note: the Lua scripts are reloaded only if you switch from a different file extension (i.e. "README.md" -> "main.ts"), or if GriddyCode is restarted.*
+原文和译文仅保存在内存中，关闭应用后不会保留。偏好设置存放在 `%APPDATA%\Godot\app_userdata\GriddyTranslate\translator.cfg`。翻译请求会将文本发送给选中的服务；例句查询会发送完整词或短语给相应词典。有道公开体验接口及 MyMemory 免费服务的额度和可用性由服务方决定。
 
-## Docs?
-### Langs
-#### Introduction
-To extend the functionality of GriddyCode for a specific **file extension**, create a file with its name. (i.e. `toml.lua`)
+## 源码与构建
 
-#### Methods
+Godot 项目位于 `src/`，可用 Godot **4.2.2** 打开 `src/project.godot`。`src/Original/` 保留对照用的原版场景、脚本和插件，使用 `.gdignore` 排除导入。
 
-| Method | Example | Description | Notes |
-| -------- | -------- | -------- | -------- |
-| `highlight(keyword: String, color: String)` | `highlight("const", "reserved")` | Tells GriddyCode to highlight a certain keyword with a preset of colors. | Available colors: `reserved`, `annotation`, `string`, `binary`, `symbol`, `variable`, `operator`, `comments`, `error`, `function`, `member` |
-| `highlight_region(start: String, end: String, color: String, line_only: bool = false)` | `highlight("/*", "*/", "comments", false)` | Tells GriddyCode to highlight a region with a preset of colors. | The `start` must be a symbol. Due to Godot's limited functionality, you can't use RegEx. |
-| `add_comment(comment: String)` | `add_comment("What is blud doing 🗣️🗣️🗣️")` | Adds a comment to be randomly chosen in the `CTRL` + `L` menu. | The username, profile picture, date, and likes are chosen by GriddyCode. |
-| `detect_functions(content: String, line: int, column: int) -> Array[String]` | `detect_functions("const test = 3; function main() {}; async init() => { main() }")` | Called by GriddyCode upon input. Results are showed in the autocomplete feature. | This must be provided by the Lua script. It must return an array of strings (i.e. ["main", "init"]). "line" and "column" are the position of the cursor when the autocomplete was requested. |
-| `detect_variables(content: String, line: int, column: int) -> Array[String]` | `detect_variables("const test = 3;")` | Called by GriddyCode upon input. Results are showed in the autocomplete feature. | This must be provided by the Lua script. It must return an array of strings (i.e. ["test"]). "line" and "column" are the position of the cursor when the autocomplete was requested. |
+Windows 构建需要 MinGW-w64 的 `gcc.exe` 已在 PATH 中。先准备固定版本的 Godot 和已验证的运行时模板，再运行构建脚本：
 
-*Note: to provide reserved variables/functions (i.e. `Math`/`parseInt()` in JS) you can have them already set up in the array you return. GriddyCode will handle the rest!*
+```powershell
+.\setup-build.ps1
+.\build.ps1
+```
 
-### Themes
-#### Introduction
-To add a theme, create a file in the **"themes"** folder with any name. (i.e. "dracula.lua"). You will be able to choose it within GriddyCode.
+`setup-build.ps1` 从 Godot 官方发布下载 4.2.2，并从本项目首个 Release 提取运行时模板。脚本使用项目相对路径。构建会验证导出的应用，然后生成 `packages/GriddyTranslate-Windows.zip`。详见 [构建说明](tools/README.md)。
 
-#### Methods
-| Method | Example | Description | Notes |
-| -------- | -------- | -------- | -------- |
-| `set_keywords(property: String, new_color: String)` | `set_keywords("reserved", "#ff00ff")` | Set the color of syntax highlighting. | The second argument must be a hex, `#` being optional. Available colors/properties listed above at `langs`. |
-| `set_gui(property: String, new_color: String)` | `set_gui("background_color", "#ff00ff")` | This method is dedicated to the overall GUI aspect of GriddyCode. | Available properties: `background_color`, `current_line_color`, `selection_color`, `font_color`, `word_highlighted_color`, `selection_background_color`. Properties except `background_color`, if not provided, will be set to a slightly modified version of `background_color`. Although possible, we don't recommend you rely on those & instead set all the values. |
-| `disable_glow()` | `disable_glow()` | Disables the "glow" setting. | This exists because Godot's *glow* seems to mess up on light colors. Not adding this on light themes may result in the entire screen going white. |
+## 来源与许可
 
-*Note: if the HEX you input is invalid, it will default to #ff0000 (red)*
+直接基于 [face-hh/griddycode](https://github.com/face-hh/griddycode) v1.2.2，原始提交 `4fb81e9d9e5974ee0c953998f27933042ed82f31`，原作者 FaceDevStuff / face-hh。GriddyTranslate 是个人维护的翻译分支。
 
-## Publishing
-If you want to use a theme/plugin for **yourself**, you can put it into your [AppData](#where).
-
-If you want to **submit** a theme/plugin, open a pull request adding it to `Lua/Plugins` or `Lua/Themes` respectively. If merged, it will be included in the next build.
-
-# Contributions
-Contributions are heavily appreciated, whether it's for adding Lua plugins, themes, safely exposing more features to Lua, or adding features directly to GriddyCode!
-
-## Notice
-- You will need to install the [Godot Engine](https://godotengine.org/) to run your proposed change & make sure it runs flawlessly.
-- You don't have to submit executables.
-- Use the v4.2 of the engine (currently Latest)
-
-## 🐛 Current bugs/needed features:
-### HIGH PRIORITY
-- The `VHS & CRT` shader, on certain themes (One Dark Pro, GitHub Light, etc.), becomes completely white. Works good on GitHub Dark;
-- Light modes get affected by *glow*, while dark modes seem fine.
-
-### MEDIUM PRIORITY
-- An option in the settings menu (`CTRL` + `,`) to change the font;
-- The current limit for lines is ~1600. If the cursor moves past that amount, the `CodeEdit` node will activate its scrolling, making the camera bug & go out of view. A limit should be implemented so that the camera won't go out of screen.
-
-### LOW PRIORITY
-- Making the cat jumping video in the settings menu fade in/out along the actual menu. Currently it ignores the transition;
-- `CTRL` + `P` to open a **quick file picker**, similar to [VSCode](https://code.visualstudio.com/docs/editor/editingevolved#:~:text=Quick%20file%20navigation,-Tip%3A%20You%20can&text=VS%20Code%20provides%20two%20powerful,release%20Ctrl%20to%20open%20it.).
-- Selecting a setting with the property "shader" *should* disable previously-enabled settings with "shader".
-- The `CheckButton` node for each `setting` scene doesn't change with the theme. This affects light themes specifically.
-
-Please note that creating a Pull Request to fix these features does *not* guarantee its merge. Please don't open a Pull Request unless you are confident you've done a good job.
+保留原项目的 [Apache-2.0 许可](LICENSE) 和署名；Godot、LuaAPI 和字体等第三方组件的许可见 [tools/licenses](tools/licenses)。

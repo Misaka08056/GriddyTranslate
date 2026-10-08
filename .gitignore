@@ -1,4 +1,19 @@
-# Godot 4+ specific ignores
-.godot/
-Tools/target
-Builds/*
+# Local build products, tools and personal/test data.
+/dist/
+/packages/
+/qa/
+/tools/godot/
+/tools/github-cli/
+/tools/windows-runtime-template.exe
+/tools/*.zip
+/src/.git/
+**/.godot/
+**/Tools/target/
+**/Builds/
+*.log
+*.err
+*.tmp
+translator.cfg
+preferences-test.cfg
+.env
+.env.*
