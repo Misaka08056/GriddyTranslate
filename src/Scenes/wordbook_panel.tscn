@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Scripts/wordbook_panel.gd" id="1_panel"]
+[ext_resource type="Theme" path="res://theme.tres" id="2_theme"]
+
+[node name="Wordbook" type="Control"]
+visible = false
+modulate = Color(1, 1, 1, 0)
+layout_mode = 0
+offset_right = 820.0
+offset_bottom = 670.0
+mouse_filter = 1
+theme = ExtResource("2_theme")
+script = ExtResource("1_panel")

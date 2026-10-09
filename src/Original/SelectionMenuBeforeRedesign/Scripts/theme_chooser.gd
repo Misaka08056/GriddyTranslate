@@ -1,4 +1,4 @@
-extends "res://Scripts/selection_menu.gd"
+extends OptionButton
 
 @onready var editor: FileManager = $"../.."
 @onready var code = %Code
@@ -6,7 +6,6 @@ extends "res://Scripts/selection_menu.gd"
 var zoom: Vector2;
 
 func _ready():
-	super._ready()
 	await LuaSingleton.on_theme_load;
 
 	for _theme in LuaSingleton.themes:

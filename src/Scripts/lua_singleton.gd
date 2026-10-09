@@ -35,6 +35,7 @@ var gui: Dictionary = {
 
 var editor_theme: Theme = load("res://theme.tres");
 var fonts = load_available_fonts()
+var _prepared_fonts: Dictionary = {}
 
 
 func load_available_fonts() -> Array:
@@ -349,6 +350,8 @@ func handle_internal_setting_change(property: String, value: Variant) -> void:
 		editor.on_provider_changed(value)
 	if p == "translation_placement":
 		editor.on_translation_placement_changed(value)
+	if p == "obsidian_sync" and is_instance_valid(editor.wordbook):
+		editor.wordbook.set_sync_enabled(value)
 	if p == "screen_motion":
 		editor.get_node("Misc/Cam").set_motion_enabled(value)
 	if p == "settings_animation_speed":
@@ -377,12 +380,35 @@ func handle_internal_setting_change(property: String, value: Variant) -> void:
 
 
 func prepare_font(original: Font) -> Font:
+	var key := original.get_instance_id()
+	if _prepared_fonts.has(key):
+		var cached: Font = _prepared_fonts[key].get_ref()
+		if cached != null: return cached
 	var result: Font = original.duplicate()
 	var cjk := SystemFont.new()
 	cjk.multichannel_signed_distance_field = true
 	cjk.font_names = PackedStringArray(["Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI"])
 	result.set_fallbacks([NOTO_COLOR_EMOJI_REGULAR, SYMBOLS_NERD_FONT, cjk])
+	_prepared_fonts[key] = weakref(result)
 	return result
+
+func readable_highlight(color: Color, beneath: Color = Color.TRANSPARENT) -> Color:
+	# Some upstream themes use their text color as an opaque occurrence fill.
+	# Preserve valid palettes, but soften fills that would erase the glyphs.
+	if beneath.a == 0.0: beneath = gui.background_color
+	if _text_contrast(beneath.blend(color)) < 3.0:
+		color.a = minf(color.a, 0.18)
+		for step in 6:
+			if _text_contrast(beneath.blend(color)) >= 3.0: break
+			color.a *= 0.5
+	return color
+
+func _text_contrast(background: Color) -> float:
+	var foreground: Color = gui.font_color.srgb_to_linear()
+	var fill := background.srgb_to_linear()
+	var text_light := foreground.r * 0.2126 + foreground.g * 0.7152 + foreground.b * 0.0722
+	var fill_light := fill.r * 0.2126 + fill.g * 0.7152 + fill.b * 0.0722
+	return (maxf(text_light, fill_light) + 0.05) / (minf(text_light, fill_light) + 0.05)
 
 func configure_translator_settings(default_font: Font) -> void:
 	# The original canvas uses Godot's default font until a font is chosen.
@@ -401,6 +427,10 @@ func configure_translator_settings(default_font: Font) -> void:
 	settings.append({"property": "settings_animation_speed", "display": "设置动画速度 / Animation Speed", "icon": "󱕒", "value": 100, "min": 25, "max": 300, "unit": "%", "options": []})
 	settings.append({"property": "view_zoom", "display": "缩放比例 / Zoom", "icon": "", "value": 100, "min": 50, "max": 200, "unit": "%", "options": []})
 	settings.append({"property": "fullscreen", "display": "全屏 / Fullscreen · F11", "icon": "󰊓", "value": false, "options": []})
+	settings.append({"property": "obsidian_sync", "display": "Obsidian 自动同步", "icon": "󰘓", "value": true, "options": []})
+	settings.append({"property": "obsidian_vault", "display": "Obsidian 保管库", "icon": "󰉋", "value": "选择保管库…", "options": [], "action": true})
+	settings.append({"property": "obsidian_folder", "display": "单词本同步文件夹", "icon": "󰉋", "value": "GriddyTranslate/单词本", "options": [], "action": true})
+	settings.append({"property": "obsidian_sync_now", "display": "Obsidian 立即同步", "icon": "󰘓", "value": "同步", "options": [], "action": true})
 
 func setup_discord_sdk(_detail: String, _state: String) -> void:
 	pass
@@ -408,6 +438,9 @@ func setup_discord_sdk(_detail: String, _state: String) -> void:
 # LUA
 var lua: LuaAPI = LuaAPI.new()
 var theme_lua: LuaAPI = LuaAPI.new()
+var _theme_bindings_ready := false
+var _loaded_theme := ""
+var _loaded_theme_modified := -1
 
 func str_to_clr(string: String) -> Color:
 	return Color.from_string(string, "#ff0000");
@@ -474,16 +507,20 @@ func setup_extension(extension):
 	done_parsing.emit()
 
 func setup_theme(given_theme: String) -> void:
-	theme_lua.bind_libraries(["base", "table", "string"])
-
-	theme_lua.push_variant("disable_glow", _lua_disable_glow)
-	theme_lua.push_variant("set_keywords", _lua_set_keywords)
-	theme_lua.push_variant("set_gui", _lua_set_gui)
-
-	var theme_err: LuaError = theme_lua.do_file("user://themes/" + given_theme + ".lua")
+	var path := "user://themes/" + given_theme + ".lua"
+	var modified := FileAccess.get_modified_time(path)
+	if _loaded_theme == given_theme and _loaded_theme_modified == modified: return
+	if not _theme_bindings_ready:
+		theme_lua.bind_libraries(["base", "table", "string"])
+		theme_lua.push_variant("disable_glow", _lua_disable_glow)
+		theme_lua.push_variant("set_keywords", _lua_set_keywords)
+		theme_lua.push_variant("set_gui", _lua_set_gui)
+		_theme_bindings_ready = true
+	var theme_err: LuaError = theme_lua.do_file(path)
 	if theme_err is LuaError:
 		editor.warn("[color=yellow]WARNING[/color]: Failed to load theme: " + theme_err.message)
 		print("ERROR %d: %s" % [theme_err.type, theme_err.message])
 		return
-
+	_loaded_theme = given_theme
+	_loaded_theme_modified = modified
 	on_theme_load.emit()

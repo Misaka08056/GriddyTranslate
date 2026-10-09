@@ -33,7 +33,7 @@ func press(key: int, ctrl: bool = true) -> void:
 	if key == KEY_T:
 		code.toggle(app.get_node("ThemePicker/ThemeChooser"), false, 504)
 		return
-	if key == KEY_L or key == KEY_O:
+	if key == KEY_L or (key == KEY_O and not translator):
 		code.toggle(app.get_node("FileDialog"))
 		return
 	if key == KEY_ESCAPE:

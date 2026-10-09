@@ -70,7 +70,7 @@ func _input(event: InputEvent) -> void:
 				staged_target = editor.LANGUAGES[selected_index][0]
 				editor.source_language = staged_source
 				editor.target_language = staged_target
-				editor.revision += 1
+				editor.on_languages_changed()
 				editor._save_preferences()
 				ui_close.emit()
 		_ : return

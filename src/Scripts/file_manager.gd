@@ -4,7 +4,10 @@ extends Node2D
 const Service = preload("res://Scripts/translation_service.gd")
 const ExampleService = preload("res://Scripts/example_service.gd")
 const ExampleReveal = preload("res://Scripts/example_reveal.gd")
+const Pronunciation = preload("res://Scripts/pronunciation_service.gd")
+const SelectionMenu = preload("res://Scripts/selection_menu.gd")
 const NOTICE = preload("res://Scenes/notice.tscn")
+const Wordbook = preload("res://Scripts/wordbook_controller.gd")
 const LANGUAGES = [["auto", "Smart / 智能中英"], ["zh-CN", "Chinese / 简体中文"], ["zh-TW", "Traditional Chinese / 繁體中文"], ["en", "English / 英语"], ["ja", "Japanese / 日语"], ["ko", "Korean / 韩语"], ["fr", "French / 法语"], ["de", "German / 德语"], ["es", "Spanish / 西班牙语"], ["ru", "Russian / 俄语"], ["it", "Italian / 意大利语"], ["pt", "Portuguese / 葡萄牙语"]]
 @onready var Code: CodeEdit = %Code
 @onready var file_dialog = %FileDialog
@@ -19,8 +22,9 @@ var last_target := "zh-CN"
 var showing_translation := false
 var auto_translate := false
 var busy := false
-var pending := false
 var revision := 0
+var translation_generation := 0
+var active_translation_key := ""
 var suppress_changes := false
 var last_error := ""
 var source_line := 0
@@ -33,10 +37,17 @@ var examples_enabled := true
 var example_revision := 0
 var result_source_text := ""
 var translation_placement := 0
+var pronunciation: Node
+var wordbook: Node
+var result_provider := "youdao"
+var current_example: Dictionary = {}
 
 func _ready() -> void:
 	service = Service.new()
 	add_child(service)
+	pronunciation = Pronunciation.new()
+	add_child(pronunciation)
+	pronunciation.playback_failed.connect(warn)
 	example_service = ExampleService.new()
 	add_child(example_service)
 	example_label = ExampleReveal.new()
@@ -46,11 +57,15 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(example_label.refresh_style)
 	debounce = Timer.new()
 	debounce.one_shot = true
-	debounce.wait_time = 1.2
+	debounce.wait_time = 0.5
 	debounce.timeout.connect(request_translation)
 	add_child(debounce)
 	LuaSingleton.configure_translator_settings(Code.get_theme_font("font"))
 	_load_preferences()
+	wordbook = Wordbook.new()
+	wordbook.name = "WordbookController"
+	add_child(wordbook)
+	wordbook.setup(self)
 	DirAccess.make_dir_recursive_absolute("user://themes")
 	for file in DirAccess.get_files_at("res://Lua/Themes"):
 		if file.ends_with(".lua"):
@@ -80,6 +95,45 @@ func _ready() -> void:
 		call_deferred("_run_examples_test")
 	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--update-test"):
 		call_deferred("_run_update_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--slider-test"):
+		call_deferred("_run_slider_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--pronunciation-test"):
+		call_deferred("_run_pronunciation_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--menu-test"):
+		call_deferred("_run_menu_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--dispatch-test"):
+		call_deferred("_run_dispatch_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--translation-performance-test"):
+		call_deferred("_run_translation_performance_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--notice-test"):
+		add_child(load("res://tests/notice_regression.gd").new())
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--theme-rendering-test"):
+		call_deferred("_run_theme_rendering_test")
+	for suite in ["wordbook-storage", "obsidian", "wordbook-ui", "wordbook", "wordbook-live"]:
+		if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--" + suite + "-test"):
+			_run_wordbook_test.call_deferred(suite)
+
+func _run_wordbook_test(suite: String) -> void:
+	var scripts := {"wordbook-storage": "wordbook_storage_regression", "obsidian": "obsidian_sync_regression", "wordbook-ui": "wordbook_ui_regression", "wordbook": "wordbook_regression", "wordbook-live": "wordbook_live_validation"}
+	add_child(load("res://tests/" + str(scripts[suite]) + ".gd").new())
+
+func _run_translation_performance_test() -> void:
+	add_child(load("res://tests/translation_performance_regression.gd").new())
+
+func _run_dispatch_test() -> void:
+	add_child(load("res://tests/translation_dispatch_regression.gd").new())
+
+func _run_menu_test() -> void:
+	add_child(load("res://tests/menu_regression.gd").new())
+
+func _run_theme_rendering_test() -> void:
+	add_child(load("res://tests/theme_rendering_regression.gd").new())
+
+func _run_pronunciation_test() -> void:
+	add_child(load("res://tests/pronunciation_regression.gd").new())
+
+func _run_slider_test() -> void:
+	add_child(load("res://tests/slider_regression.gd").new())
 
 func _run_update_test() -> void:
 	add_child(load("res://tests/update_regression.gd").new())
@@ -102,16 +156,41 @@ func _run_examples_test() -> void:
 	add_child(load("res://tests/example_visual.gd").new())
 
 func _input(event: InputEvent) -> void:
-	if not event is InputEventKey or not event.pressed or event.echo: return
+	if not event is InputEventKey or not event.pressed: return
+	if event.echo:
+		if is_instance_valid(wordbook) and wordbook.is_active() and wordbook.panel.handle_key(event): get_viewport().set_input_as_handled()
+		return
+	if is_instance_valid(SelectionMenu.active_menu):
+		if event.keycode == KEY_F11:
+			SelectionMenu.active_menu.close_menu(false)
+		elif SelectionMenu.active_menu.handle_key(event):
+			get_viewport().set_input_as_handled()
+			return
 	var control: bool = event.ctrl_pressed or event.meta_pressed
 	var key: int = event.keycode
+	if is_instance_valid(wordbook) and wordbook.is_active():
+		if wordbook.panel.handle_key(event):
+			get_viewport().set_input_as_handled()
+			return
+		if not (key == KEY_ESCAPE or key == KEY_F11 or (control and key in [KEY_B, KEY_P, KEY_O])): return
 	if key == KEY_F11:
 		LuaSingleton.change_setting("fullscreen", not LuaSingleton.get_setting("fullscreen")[0].value)
 		LuaSingleton.on_settings_change.emit()
 	elif control and key == KEY_COMMA: Code.toggle(%Settings, true, (18 * 7.5) * 2)
 	elif control and key == KEY_T: Code.toggle(%ThemeChooser, false, (18 * 28))
 	elif control and key == KEY_I: Code.toggle(%Info, true, 1500)
-	elif control and key in [KEY_O, KEY_L]:
+	elif control and key == KEY_B: wordbook.toggle_panel()
+	elif control and key == KEY_D:
+		# Capture the selection before closing an overlay can change focus.
+		if Code.active_overlay == null: wordbook.collect_current()
+	elif control and event.shift_pressed and key == KEY_O: wordbook.open_selected()
+	elif control and key == KEY_P:
+		if wordbook.is_active(): wordbook.speak_selected(false)
+		else: play_pronunciation(false)
+	elif control and key == KEY_O:
+		if wordbook.is_active(): wordbook.speak_selected(true)
+		else: play_pronunciation(true)
+	elif control and key == KEY_L:
 		Code.toggle(%FileDialog)
 		if Code._show == false: get_tree().create_timer(Code.panel_duration() + 0.03).timeout.connect(restore_input_focus)
 	elif key == KEY_ESCAPE: close_active_panel()
@@ -134,14 +213,26 @@ func _input(event: InputEvent) -> void:
 		swap_texts()
 	elif control and key == KEY_N:
 		if not await dismiss_for_action(): return
+		pronunciation.stop()
+		cancel_translation()
 		revision += 1
 		source_text = ""
 		translated_text = ""
-		pending = false
 		debounce.stop()
 		_display(false)
 	else: return
 	get_viewport().set_input_as_handled()
+
+func play_pronunciation(translated: bool) -> void:
+	var value: String = translated_text if translated else (source_text if showing_translation else Code.text)
+	if value.strip_edges().is_empty():
+		pronunciation.stop()
+		warn("请先翻译，再按 Ctrl+O 播放译文读音。" if translated else "请先输入原文，再按 Ctrl+P 播放读音。")
+		return
+	var language: String = last_target if translated else source_language
+	if language == "auto": language = Service.detect_language(value)
+	var error: String = await pronunciation.speak(value, language)
+	if not error.is_empty(): warn(error)
 
 func dismiss_for_action() -> bool:
 	# Consume the shortcut before waiting; otherwise CodeEdit also receives it.
@@ -158,6 +249,8 @@ func restore_input_focus() -> void:
 
 func on_source_changed() -> void:
 	if suppress_changes or showing_translation: return
+	if is_instance_valid(pronunciation): pronunciation.stop()
+	cancel_translation()
 	cancel_examples()
 	source_text = Code.text
 	revision += 1
@@ -172,6 +265,7 @@ func on_auto_translation_changed() -> void:
 
 func cancel_examples() -> void:
 	example_revision += 1
+	current_example.clear()
 	if is_instance_valid(example_label): example_label.cancel()
 
 func on_examples_changed() -> void:
@@ -198,12 +292,28 @@ func result_first_line() -> int:
 
 func on_provider_changed(index: int) -> void:
 	if not is_instance_valid(service) or index < 0 or index >= Service.PROVIDERS.size(): return
+	cancel_translation()
 	service.provider = Service.PROVIDERS[index]
 	example_service.provider = service.provider
 	revision += 1
 	cancel_examples()
 	debounce.stop()
 	if auto_translate and not showing_translation and not source_text.strip_edges().is_empty(): debounce.start()
+
+func on_languages_changed() -> void:
+	cancel_translation()
+	if is_instance_valid(pronunciation): pronunciation.stop()
+	revision += 1
+	cancel_examples()
+	debounce.stop()
+	if auto_translate and not showing_translation and not source_text.strip_edges().is_empty(): debounce.start()
+
+func cancel_translation() -> void:
+	# Invalidate the coroutine before cancellation can wake an older HTTP wait.
+	translation_generation += 1
+	busy = false
+	active_translation_key = ""
+	if is_instance_valid(service) and service.has_method("cancel"): service.cancel()
 
 func show_examples(token: int) -> void:
 	if not examples_enabled or not showing_translation or last_source != "en" or not last_target.begins_with("zh"): return
@@ -216,6 +326,7 @@ func show_examples(token: int) -> void:
 	else:
 		result = await service.translate_chunk(example.english, "en", last_target)
 	if token != example_revision or not examples_enabled or not showing_translation or not result.ok: return
+	current_example = {"english": str(example.english), "chinese": str(result.text)}
 	example_label.show_example(example.english, str(result.text))
 
 func request_translation() -> void:
@@ -225,50 +336,66 @@ func request_translation() -> void:
 	if source_text.length() > 5000:
 		warn("Maximum 5000 characters / 单次最多 5000 字")
 		return
-	if busy:
-		pending = true
-		return
 	var source := source_language
 	if source == "auto": source = Service.detect_language(source_text)
 	var target := target_language
 	if target == "auto": target = "en" if source.begins_with("zh") else "zh-CN"
 	var request_revision := revision
 	var value := source_text
+	var request_key := JSON.stringify([service.provider, source, target, value])
+	# Repeated Ctrl+Enter joins the current snapshot without restarting its HTTP.
+	if busy and active_translation_key == request_key: return
+	if busy: cancel_translation()
 	last_error = ""
 	if source == target:
 		last_source = source
 		last_target = target
+		result_provider = service.provider
 		result_source_text = value
 		translated_text = value
 		_display(true)
 		return
+	translation_generation += 1
+	var token := translation_generation
 	busy = true
-	pending = false
+	active_translation_key = request_key
+	var result: Dictionary
+	if service.has_method("translate_text"):
+		result = await service.translate_text(value, source, target)
+	else:
+		result = await _translate_chunks(value, source, target, token)
+	# A cancelled request may finish after its replacement. It must not clear
+	# the new request's busy state or apply an obsolete translation/error.
+	if token != translation_generation: return
+	busy = false
+	active_translation_key = ""
+	if request_revision != revision or result.get("cancelled", false): return
+	if not result.get("ok", false):
+		last_error = str(result.get("error", "翻译服务暂不可用。Ctrl+Enter 重试。"))
+		if not last_error.is_empty(): warn(last_error)
+		return
+	last_source = source
+	last_target = target
+	result_provider = service.provider
+	result_source_text = value
+	translated_text = str(result.text)
+	if Code.active_overlay == null: _display(true)
+
+func _translate_chunks(value: String, source: String, target: String, token: int) -> Dictionary:
+	# Keep the legacy chunk API available for alternate service adapters.
 	var combined := ""
 	for piece in Service.split_chunks(value):
-		if request_revision != revision: break
+		if token != translation_generation: return {"ok": false, "cancelled": true}
 		if piece.strip_edges().is_empty():
 			combined += piece
 			continue
 		var result: Dictionary = await service.translate_chunk(piece, source, target)
-		if request_revision != revision: break
-		if not result.ok:
-			last_error = result.error
-			warn(last_error)
-			break
+		if token != translation_generation: return {"ok": false, "cancelled": true}
+		if not result.get("ok", false): return result
 		var leading: String = piece.substr(0, piece.length() - piece.lstrip(" \t\r\n").length())
 		var trailing: String = piece.substr(piece.rstrip(" \t\r\n").length())
 		combined += leading + str(result.text).strip_edges() + trailing
-	busy = false
-	if request_revision == revision and last_error.is_empty():
-		last_source = source
-		last_target = target
-		result_source_text = value
-		translated_text = combined
-		if Code.active_overlay == null: _display(true)
-	if pending or (auto_translate and request_revision != revision):
-		pending = false
-		debounce.start()
+	return {"ok": true, "text": combined}
 
 func _display(target: bool) -> void:
 	cancel_examples()
@@ -295,6 +422,11 @@ func switch_view() -> void:
 
 func swap_texts() -> void:
 	if translated_text.is_empty() or busy: return
+	var original: String = source_text if showing_translation else Code.text
+	if original != result_source_text:
+		warn("原文已修改，请先按 Ctrl+Enter 翻译，再交换语言。")
+		return
+	pronunciation.stop()
 	var previous := source_text
 	source_text = translated_text
 	translated_text = previous
@@ -309,7 +441,14 @@ func swap_texts() -> void:
 	file_dialog.setup()
 	_save_preferences()
 
+func _exit_tree() -> void:
+	cancel_translation()
+	if is_instance_valid(pronunciation): pronunciation.stop()
+
 func close_active_panel() -> void:
+	if is_instance_valid(SelectionMenu.active_menu):
+		SelectionMenu.active_menu.close_menu()
+		return
 	if Code.node_is_transitioning: return
 	if Code.active_overlay != null:
 		var node = Code.active_overlay
@@ -322,14 +461,14 @@ func close_active_panel() -> void:
 	elif showing_translation: _display(false)
 
 func warn(message: String) -> void:
+	for previous in canvas_layer.get_children():
+		if previous.has_method("dismiss"): previous.dismiss()
 	var notice = NOTICE.instantiate()
 	canvas_layer.add_child(notice)
 	notice.set_notice(message)
-	get_tree().create_timer(5.0).timeout.connect(notice.queue_free)
 
 func preview_theme(index: int) -> void:
 	LuaSingleton.setup_theme(%ThemeChooser.get_item_text(index))
-	LuaSingleton.on_settings_change.emit()
 func _on_theme_chooser_item_focused(index): preview_theme(index)
 func _on_theme_chooser_item_selected(index):
 	preview_theme(index)
@@ -373,6 +512,7 @@ func _save_preferences() -> void:
 	var selected_font: int = LuaSingleton.get_setting("editor_font")[0].value
 	config.set_value("settings", "font", LuaSingleton.fonts[selected_font].name)
 	config.set_value("settings", "provider", Service.PROVIDERS[LuaSingleton.get_setting("translation_provider")[0].value])
+	if is_instance_valid(wordbook): wordbook.save_preferences(config)
 	for setting in LuaSingleton.settings: config.set_value("visual", setting.property, setting.value)
 	config.save("user://translator.cfg")
 

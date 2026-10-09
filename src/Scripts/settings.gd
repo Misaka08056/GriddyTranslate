@@ -31,20 +31,26 @@ func _ready() -> void:
 	setup_theme()
 
 func setup_theme() -> void:
+	code.begin_bulk_theme_override()
 	setup_highlighter()
 
 	%Background.color = LuaSingleton.gui.background_color;
 	%ExternalBackground.color = LuaSingleton.gui.background_color;
 
 	code.add_theme_color_override("background_color", LuaSingleton.gui.background_color)
-	code.add_theme_color_override("current_line_color", LuaSingleton.gui.current_line_color)
-	code.add_theme_color_override("selection_color", LuaSingleton.gui.selection_color)
+	var line_color := LuaSingleton.readable_highlight(LuaSingleton.gui.current_line_color)
+	var line_background: Color = LuaSingleton.gui.background_color.blend(line_color)
+	var selection_color := LuaSingleton.readable_highlight(LuaSingleton.gui.selection_color, line_background)
+	code.add_theme_color_override("current_line_color", line_color)
+	code.add_theme_color_override("selection_color", selection_color)
 	code.add_theme_color_override("font_color", LuaSingleton.gui.font_color)
+	code.add_theme_color_override("font_selected_color", LuaSingleton.gui.font_color)
 	code.add_theme_color_override("font_readonly_color", LuaSingleton.gui.font_color)
-	code.add_theme_color_override("word_highlighted_color", LuaSingleton.gui.word_highlighted_color)
+	code.add_theme_color_override("word_highlighted_color", LuaSingleton.readable_highlight(LuaSingleton.gui.word_highlighted_color, line_background.blend(selection_color)))
 	code.add_theme_color_override("completion_background_color", LuaSingleton.gui.completion_background_color)
 	code.add_theme_color_override("completion_selected_color", LuaSingleton.gui.completion_selected_color)
 	code.add_theme_color_override("caret_color", LuaSingleton.gui.caret_color)
+	code.end_bulk_theme_override()
 
 	for label in rich_text_labels:
 		label.add_theme_color_override("default_color", LuaSingleton.gui.font_color)
@@ -107,6 +113,9 @@ func toggle(node: Object, apply_background: bool = true, factor: float = (18 * 7
 	if active_overlay != node and active_overlay != null: return # we already have an overlay active, and this function call isn't from it trying to hide, so fuck off
 	if active_overlay == node && !_show: return # if the active overlay is the node trying to toggle, and it wants to show even tho it's already shown, it shall fuck off
 	if node_is_transitioning: return # node is already trying to go, stop spamming the keys; DO NOT FUCKING REMOVE.
+	if node == %Settings:
+		%SettingsList.release_slider_interactions()
+		%SettingsList.set_sliders_interactive(false)
 
 	var opacity = 0 if _show else 1;
 
@@ -114,7 +123,7 @@ func toggle(node: Object, apply_background: bool = true, factor: float = (18 * 7
 
 	var future_pos = slide_from_left(node, opacity, factor)
 
-	if node is FileDialogType:
+	if node.has_method("focus_position") and "active" in node:
 		node.active = !_show;
 
 		if _show && !editor.current_file:
@@ -130,19 +139,22 @@ func toggle(node: Object, apply_background: bool = true, factor: float = (18 * 7
 		if !node is FileDialogType:
 			code.grab_focus()
 	else:
+		var focus_zoom: Vector2 = node.zoom if ("zoom" in node) else Vector2.ONE
 		if node.name == "Info":
 			future_pos.x += 700
 			future_pos.y += 500
 		if node.name == "Settings":
-			future_pos.x += 200
-			future_pos.y += 300
+			var bounds := Vector2(650, maxf(%SettingsList.size.y + 28, 600))
+			future_pos += %SettingsList.position + bounds * 0.5
+			var viewport_size := get_viewport_rect().size
+			focus_zoom = Vector2.ONE * minf(1.0, minf(viewport_size.x * 0.86 / bounds.x, viewport_size.y * 0.86 / bounds.y))
 		if node.name == "Comments":
 			future_pos.x += 200
 			future_pos.y += 300
-		if node is FileDialogType:
+		if node.has_method("focus_position"):
 			future_pos = node.focus_position(future_pos)
 
-		%Cam.focus_on(future_pos, node.zoom if ("zoom" in node) else Vector2(1,1))
+		%Cam.focus_on(future_pos, node.zoom if ("zoom" in node) else focus_zoom)
 		code.release_focus()
 
 	_show = !_show;
@@ -182,6 +194,8 @@ func slide_from_left(node: Object, __show: bool, factor: float) -> Vector2:
 	tween.tween_property(node, "position", future_pos, panel_duration())
 	tween.tween_callback(func() -> void:
 		node_is_transitioning = false;
+		if node == %Settings and __show:
+			%SettingsList.set_sliders_interactive(true)
 	)
 
 	return future_pos
