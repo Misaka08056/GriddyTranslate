@@ -35,6 +35,7 @@ var _background: VideoStreamPlayer
 var _logo: ColorRect
 var _material: ShaderMaterial
 var _fade: Tween
+var _previous_max_fps := -1
 
 func _ready() -> void:
 	name = "Startup"
@@ -42,15 +43,29 @@ func _ready() -> void:
 	_background = $Artwork/Background
 	_logo = $Artwork/Logo
 	var args := OS.get_cmdline_user_args()
+	# The project boots without decoration, before autoloads/scene work. Apply
+	# the saved window style here rather than waiting for the editor to mount.
+	var borderless := args.has("--test") and args.has("--borderless-test")
+	var fullscreen := false
 	enabled = not args.has("--test") or args.has("--startup-animation")
 	if not args.has("--test"):
 		var preferences := ConfigFile.new()
 		if preferences.load("user://translator.cfg") == OK:
 			enabled = bool(preferences.get_value("visual", "startup_animation", true))
+			borderless = bool(preferences.get_value("visual", "borderless", false))
+			fullscreen = bool(preferences.get_value("visual", "fullscreen", false))
+	if DisplayServer.get_name() != "headless":
+		var desired_mode := DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
+		if DisplayServer.window_get_mode() != desired_mode: DisplayServer.window_set_mode(desired_mode)
+		if DisplayServer.window_get_flag(DisplayServer.WINDOW_FLAG_BORDERLESS) != borderless:
+			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, borderless)
 	_native_directory = OS.get_environment("GRIDDY_NATIVE_SPLASH_DIR")
 	_native = enabled and OS.get_environment("GRIDDY_NATIVE_SPLASH_ACTIVE") == "1" and not _native_directory.is_empty()
 	_native_process_id = int(OS.get_environment("GRIDDY_NATIVE_SPLASH_PID"))
 	_native_next_check_ms = Time.get_ticks_msec() + 2000
+	if _native:
+		_previous_max_fps = Engine.max_fps
+		if Engine.max_fps == 0 or Engine.max_fps > 60: Engine.max_fps = 60
 	# The portable launcher owns the animation before the engine exists. Keep
 	# its single continuous playback on screen while this scene loads the editor.
 	# Direct runtime launches retain the same Godot animation as a fallback.
@@ -92,7 +107,7 @@ func _build_artwork() -> void:
 	_logo.set_meta("title", TITLE)
 
 func _layout_artwork() -> void:
-	var scale_factor := minf(_art.size.x / 640.0, _art.size.y / 360.0)
+	var scale_factor := maxf(_art.size.x / 640.0, _art.size.y / 360.0)
 	var frame_size := Vector2(640, 360) * scale_factor
 	var origin := (_art.size - frame_size) * 0.5
 	_background.position = origin
@@ -187,12 +202,29 @@ static func _record_editor_frame(target: Node, splash_frame_ms: int) -> void:
 	var frame_ms := Time.get_ticks_msec()
 	target.set_meta("first_frame_ms", frame_ms)
 	if bool(target.get_meta("native_startup", false)):
-		var ready := FileAccess.open(OS.get_environment("GRIDDY_NATIVE_SPLASH_DIR").path_join("ready"), FileAccess.WRITE)
-		if ready != null:
-			ready.store_string(str(frame_ms))
-			ready.close()
+		_prepare_native_handoff(target)
 	if OS.get_cmdline_user_args().has("--startup-profile"):
 		print("STARTUP_TIMING splash_ms=%d editor_ms=%d" % [splash_frame_ms, frame_ms])
+
+static func _prepare_native_handoff(target: Node) -> void:
+	# The first drawn frame can still be followed by font/shader/window-resize
+	# stalls. Keep the native cover until several real frames have settled.
+	var started := Time.get_ticks_msec()
+	var previous := started
+	var stable := 0
+	if DisplayServer.get_name() != "headless":
+		while is_instance_valid(target) and stable < 6 and Time.get_ticks_msec() - started < 1500:
+			await RenderingServer.frame_post_draw
+			var now := Time.get_ticks_msec()
+			stable = stable + 1 if now - previous <= 50 else 0
+			previous = now
+	if not is_instance_valid(target): return
+	target.set_meta("startup_warm_frames", stable)
+	target.set_meta("startup_warm_ms", Time.get_ticks_msec() - started)
+	var ready := FileAccess.open(OS.get_environment("GRIDDY_NATIVE_SPLASH_DIR").path_join("ready"), FileAccess.WRITE)
+	if ready != null:
+		ready.store_string(str(Time.get_ticks_msec()))
+		ready.close()
 
 func _input(event: InputEvent) -> void:
 	if consume_startup_input(event): get_viewport().set_input_as_handled()
@@ -234,6 +266,7 @@ func _complete() -> void:
 	set_process_input(false)
 	_background.stop()
 	_art.hide()
+	if _previous_max_fps >= 0: Engine.max_fps = _previous_max_fps
 	if is_instance_valid(editor):
 		editor.set_meta("input_ready_ms", Time.get_ticks_msec())
 		if _native: editor.set_meta("native_completed", FileAccess.file_exists(_native_directory.path_join("done")))

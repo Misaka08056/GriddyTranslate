@@ -42,6 +42,13 @@ func run() -> void:
 	await get_tree().process_frame
 	if expected: check(bool(app.get_meta("native_completed", false)), "native coordinator waits for the launcher's completed exit marker")
 	check(app.get_node("Code").has_focus() and app.has_meta("input_ready_ms"), "native exit restores a usable focused translation canvas")
+	if OS.get_cmdline_user_args().has("--borderless-test"):
+		check(DisplayServer.window_get_flag(DisplayServer.WINDOW_FLAG_BORDERLESS), "borderless startup retains the saved window style after handoff")
+		var viewport_size := get_viewport().get_visible_rect().size
+		var window_size := Vector2(DisplayServer.window_get_size())
+		check(absf(viewport_size.x / viewport_size.y - window_size.x / window_size.y) < 0.005, "expanded canvas fills a non-16:9 borderless window without letterbox bands")
+	if expected:
+		check(int(app.get_meta("startup_warm_frames", 0)) >= 6, "native cover waits for several settled editor frames before fading")
 	var destination := OS.get_environment("GRIDDY_TEST_OUTPUT")
 	var typed := InputEventKey.new()
 	typed.keycode = KEY_A
@@ -60,7 +67,7 @@ func run() -> void:
 	if not destination.is_empty():
 		var file := FileAccess.open(destination.path_join("runtime-result.json"), FileAccess.WRITE)
 		if file != null:
-			file.store_string(JSON.stringify({"failures": failures, "process_id": OS.get_process_id(), "native": expected, "native_completed": app.get_meta("native_completed", false), "editor_ms": app.get_meta("first_frame_ms", -1), "input_ms": app.get_meta("input_ready_ms", -1)}, "\t"))
+			file.store_string(JSON.stringify({"failures": failures, "process_id": OS.get_process_id(), "native": expected, "native_completed": app.get_meta("native_completed", false), "editor_ms": app.get_meta("first_frame_ms", -1), "input_ms": app.get_meta("input_ready_ms", -1), "warm_frames": app.get_meta("startup_warm_frames", 0), "warm_ms": app.get_meta("startup_warm_ms", 0)}, "\t"))
 			file.close()
 	print("NATIVE_STARTUP_COMPLETE failures=" + str(failures))
 	get_tree().quit.call_deferred(0 if failures == 0 else 1)

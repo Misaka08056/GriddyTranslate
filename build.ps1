@@ -1,4 +1,4 @@
-param([switch]$SkipTests, [switch]$StartupOnly, [string]$OutputDirectory)
+param([switch]$SkipTests, [switch]$StartupOnly, [switch]$LauncherOnly, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $sourceDir = Join-Path $projectRoot 'src'
@@ -17,12 +17,13 @@ $env:DISABLE_RTSS_LAYER = '1'
 $env:VK_LOADER_LAYERS_DISABLE = 'VK_LAYER_RTSS'
 
 # Resolve the template relative to this script, so future directory moves work.
+$runtimeExe = Join-Path $appDir 'GriddyTranslate.runtime.exe'
+if (!$LauncherOnly) {
 $presetPath = Join-Path $sourceDir 'export_presets.cfg'
 $preset = Get-Content -LiteralPath $presetPath -Raw
 $templateForGodot = $templateExe.Replace('\','/')
 $preset = [regex]::Replace($preset,'custom_template/(debug|release)="[^"]*"', ('custom_template/$1="' + $templateForGodot + '"'))
 [IO.File]::WriteAllText($presetPath, $preset, [Text.UTF8Encoding]::new($false))
-$runtimeExe = Join-Path $appDir 'GriddyTranslate.runtime.exe'
 $exportLog = Join-Path $qaDir 'export.log'
 $exportErr = Join-Path $qaDir 'export.err'
 $exportArgs = '--headless --path "' + $sourceDir + '" --export-debug "Windows Desktop" "' + $runtimeExe + '"'
@@ -37,9 +38,10 @@ if ($exportProcess.ExitCode -ne 0) {
     if ($SkipTests) { throw 'Nonzero exporter exit requires runtime validation; run without -SkipTests.' }
     Write-Warning 'Exporter exited during native-extension shutdown. Validating the exported application before accepting the build.'
 }
+}
 if (!(Test-Path -LiteralPath $runtimeExe) -or !(Test-Path -LiteralPath (Join-Path $appDir 'GriddyTranslate.runtime.pck'))) { throw 'Export did not create both runtime and pack.' }
 $compiler = (Get-Command gcc.exe -ErrorAction Stop).Source
-& $compiler -O2 -static -municode -mwindows -Wall -Wextra (Join-Path $projectRoot 'tools\launcher.c') -o (Join-Path $appDir 'GriddyTranslate.exe') -lole32 -lwindowscodecs -lgdi32 -luser32
+& $compiler -O2 -static -municode -mwindows -Wall -Wextra (Join-Path $projectRoot 'tools\launcher.c') -o (Join-Path $appDir 'GriddyTranslate.exe') -lole32 -lwindowscodecs -lgdi32 -luser32 -lwinmm
 if ($LASTEXITCODE -ne 0) { throw 'Standalone launcher build failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'tools\native-startup.frames') -Destination $appDir -Force
 Copy-Item -LiteralPath (Join-Path $sourceDir 'addons\luaAPI\bin\libluaapi.windows.template_debug.x86_64.dll') -Destination $appDir -Force
@@ -49,6 +51,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'docs\修复说明.md') -Destinat
 Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tools\licenses') -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $appDir -Force }
 
 if (!$SkipTests) {
+    if (!$LauncherOnly) {
     $suites = if ($StartupOnly) { @('startup-wrap') } else { @('regression','update','slider','pronunciation','menu','startup-wrap','theme-rendering','dispatch','translation-performance','wordbook-storage','obsidian','wordbook-ui','wordbook','notice') }
     foreach ($testName in $suites) {
         $env:GRIDDY_TEST_OUTPUT = Join-Path $qaDir ('packaged-' + $testName)
@@ -94,11 +97,13 @@ if (!$SkipTests) {
         if ($testProcess.ExitCode -ne 0 -or $testOutput -notmatch 'STARTUP_WRAP_COMPLETE failures=0' -or $testOutput -match '(?m)^FAIL ' -or $testErrors -match 'SCRIPT ERROR|Parse Error') { throw "Runtime startup verification failed: $mode" }
         Write-Output "Verified packaged startup $mode test."
     }
+    }
     foreach ($mode in @('natural','skip','disabled')) {
         $env:GRIDDY_TEST_OUTPUT = Join-Path $qaDir ('packaged-native-' + $mode)
         New-Item -ItemType Directory -Path $env:GRIDDY_TEST_OUTPUT -Force | Out-Null
-        $testArgs = '--resolution 1280x720 -- --test --native-startup-test --startup-profile'
+        $testArgs = '--resolution 1280x760 -- --test --native-startup-test --startup-profile --borderless-test'
         if ($mode -ne 'disabled') { $testArgs += ' --startup-animation' }
+        if ($mode -eq 'natural') { $testArgs += ' --native-startup-performance' }
         if ($mode -eq 'skip') { $testArgs += ' --native-startup-auto-skip' }
         $launcher = Start-Process -FilePath (Join-Path $appDir 'GriddyTranslate.exe') -ArgumentList $testArgs -WindowStyle Hidden -PassThru
         $testHandle = $launcher.Handle
@@ -107,7 +112,8 @@ if (!$SkipTests) {
         $runtime = Get-Content -LiteralPath (Join-Path $env:GRIDDY_TEST_OUTPUT 'runtime-result.json') -Raw | ConvertFrom-Json
         if ($launcher.ExitCode -ne 0 -or $runtime.failures -ne 0 -or $native.launcher_pid -ne $launcher.Id -or $native.runtime_pid -ne $runtime.process_id) { throw "Native startup validation failed: $mode" }
         if ($mode -ne 'disabled') {
-            if (!$native.first_window_visible -or !$native.owner_attached) { throw "Native splash was not visibly covering its runtime: $mode" }
+            if (!$native.borderless -or $native.decorated_child_seen) { throw "Borderless startup exposed window decoration: $mode" }
+            if (!$native.first_window_visible -or !$native.runtime_covered) { throw "Native splash was not visibly covering its runtime: $mode" }
             if ($native.first_paint_ms -gt 250 -or $native.first_paint_ms -le 0) { throw "Early splash did not paint promptly: $mode" }
             if ($native.width -ne 1920 -or $native.height -ne 1080 -or $native.frame_count -ne 330) { throw 'Native startup frame pack is not the verified Full HD sequence.' }
             if ($native.exit_start_ms - $native.logo_complete_ms -lt 500 -or $native.exit_start_ms -lt $native.ready_ms -or $native.exit_end_ms - $native.exit_start_ms -lt 450) { throw "Native startup skipped the logo hold, ready handoff or exit: $mode" }
@@ -133,7 +139,7 @@ try {
     }
 } finally { $archive.Dispose() }
 Move-Item -LiteralPath $zipTemporary -Destination $zipPath -Force
-$manifest = [ordered]@{ generatedAt=(Get-Date).ToString('o'); project=$projectRoot; zip=$zipPath; sha256=(Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash; bytes=(Get-Item -LiteralPath $zipPath).Length; tested=(!$SkipTests); verification=$(if ($StartupOnly) { 'startup' } else { 'full' }) }
+$manifest = [ordered]@{ generatedAt=(Get-Date).ToString('o'); project=$projectRoot; zip=$zipPath; sha256=(Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash; bytes=(Get-Item -LiteralPath $zipPath).Length; tested=(!$SkipTests); verification=$(if ($LauncherOnly) { 'native-startup' } elseif ($StartupOnly) { 'startup' } else { 'full' }) }
 $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $packageDir 'manifest.json') -Encoding utf8
 ($manifest.sha256.ToLowerInvariant() + '  GriddyTranslate-Windows.zip') | Set-Content -LiteralPath (Join-Path $packageDir 'SHA256SUMS.txt') -Encoding ascii
 Write-Output "Portable ZIP: $zipPath"
