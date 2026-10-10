@@ -1,0 +1,36 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Scripts/startup_screen.gd" id="1_startup"]
+
+[node name="Startup" type="CanvasLayer"]
+layer = 120
+script = ExtResource("1_startup")
+
+[node name="Artwork" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Matte" type="ColorRect" parent="Artwork"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.006, 0.002, 0.002, 1)
+
+[node name="Background" type="VideoStreamPlayer" parent="Artwork"]
+layout_mode = 0
+mouse_filter = 2
+expand = true
+volume_db = -80.0
+
+[node name="Logo" type="ColorRect" parent="Artwork"]
+layout_mode = 0
+mouse_filter = 2

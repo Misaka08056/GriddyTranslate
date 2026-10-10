@@ -97,16 +97,18 @@ func stable_menu(menu: OptionButton, description: String) -> void:
 	var camera: Camera2D = app.get_node("Misc/Cam")
 	var initial_motion := camera.offset
 	var drift := 0.0
-	var trigger_drift := 0.0
+	var relative_drift := 0.0
+	var original_gap := original.position - trigger.position
 	var other_motion := 0.0
 	for frame in 24:
 		await RenderingServer.frame_post_draw
 		var current: Rect2 = menu.menu_rect()
 		drift = maxf(drift, current.position.distance_to(original.position) + current.size.distance_to(original.size))
 		var current_trigger: Rect2 = menu.anchor_rect()
-		trigger_drift = maxf(trigger_drift, current_trigger.position.distance_to(trigger.position) + current_trigger.size.distance_to(trigger.size))
+		relative_drift = maxf(relative_drift, (current.position - current_trigger.position).distance_to(original_gap))
 		other_motion = maxf(other_motion, camera.offset.distance_to(initial_motion))
-	check(drift < 0.05 and trigger_drift < 0.05, description + " stays stable in position and size while open")
+	check(relative_drift < 0.10, description + " follows its trigger in the same frame without relative jitter")
+	check(drift > 0.05, description + " floats together with its trigger instead of staying fixed on screen")
 	check(other_motion > 0.05 and camera.motion_enabled, description + " leaves the camera and surrounding UI moving")
 
 func run() -> void:
@@ -118,12 +120,15 @@ func run() -> void:
 	await get_tree().create_timer(1.2).timeout
 	var theme_menu: OptionButton = app.get_node("ThemePicker/ThemeChooser")
 	check(code.active_overlay == theme_menu and theme_menu.has_focus(), "Ctrl+T retains the animated theme chooser and keyboard focus")
+	var source_left := (get_viewport().get_final_transform() * code.get_global_transform_with_canvas()).origin.x
+	check(theme_menu.anchor_rect().end.x < source_left - 12.0, "Ctrl+T trigger sits to the left of the source input with a clear gap")
 	click_at(theme_menu.anchor_rect().get_center(), true)
 	await get_tree().process_frame
 	click_at(theme_menu.anchor_rect().get_center(), false)
 	await get_tree().create_timer(0.20).timeout
 	check(theme_menu.is_menu_open() and not theme_menu.get_popup().visible, "actual button click opens only the redesigned menu")
 	check(aligned(theme_menu) and fits(theme_menu), "theme menu aligns to the rendered button and fits the real window")
+	check(theme_menu.menu_rect().end.x < source_left - 12.0, "expanded theme list also leaves the source input clear")
 	var combined: Transform2D = get_viewport().get_final_transform() * theme_menu._layer.transform
 	check(combined.is_equal_approx(Transform2D.IDENTITY), "menu canvas cancels viewport stretch so text uses real screen pixels")
 	check(theme_menu._font.multichannel_signed_distance_field, "opened menu uses MSDF text")

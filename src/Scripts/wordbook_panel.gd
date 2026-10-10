@@ -15,13 +15,14 @@ var active := false:
 		active = value
 		if not is_node_ready(): return
 		if value:
+			_ensure_ui()
 			_apply_theme()
 			refresh()
 			_focus_search.call_deferred()
 		else:
 			_cancel_edit()
 			_delete_id = ""
-			search.release_focus()
+			if is_instance_valid(search): search.release_focus()
 
 var selected_index := 0
 var expanded := false
@@ -44,16 +45,23 @@ var _translation_edit: TextEdit
 var _tags_edit: LineEdit
 var _notes_edit: TextEdit
 var _form_labels: Array[Label] = []
+var _ui_built := false
 
 func _ready() -> void:
 	size = PANEL_SIZE
 	_font = get_parent().get_node("Code").get_theme_font("font")
-	_build_ui()
-	_apply_theme()
 	LuaSingleton.on_theme_load.connect(_apply_theme)
 	LuaSingleton.on_settings_change.connect(_apply_theme)
 	get_viewport().size_changed.connect(_refocus_after_resize)
 	visibility_changed.connect(_on_visibility_changed)
+	if visible: _ensure_ui()
+
+func _ensure_ui() -> void:
+	if _ui_built: return
+	_font = get_parent().get_node("Code").get_theme_font("font")
+	_build_ui()
+	_ui_built = true
+	_apply_theme()
 	refresh()
 
 func setup(store_node: Node) -> void:
@@ -147,8 +155,9 @@ func _text_edit(node_name: String, at: Vector2, bounds: Vector2) -> TextEdit:
 	return node
 
 func _apply_theme() -> void:
-	if not is_node_ready() or not is_instance_valid(search): return
+	if not is_node_ready(): return
 	if not is_visible_in_tree(): return
+	if not _ui_built: _ensure_ui()
 	var code := get_parent().get_node_or_null("Code")
 	_font = code.get_theme_font("font") if code is Control else LuaSingleton.editor_theme.get_font("font", "MyType")
 	var color: Color = LuaSingleton.gui.font_color
@@ -189,7 +198,7 @@ func _apply_theme() -> void:
 	_render_detail()
 
 func refresh() -> void:
-	if not is_node_ready() or not is_instance_valid(search): return
+	if not is_node_ready() or not _ui_built: return
 	var current := selected_entry()
 	var wanted_id := str(current.get("id", ""))
 	filtered.clear()
@@ -490,6 +499,7 @@ func _refocus_after_resize() -> void:
 		if cam != null: cam.focus_on(focus_position(global_position), zoom)
 
 func _on_visibility_changed() -> void:
+	if visible and is_node_ready(): _ensure_ui()
 	if not visible and active: active = false
 
 func _process(_delta: float) -> void:

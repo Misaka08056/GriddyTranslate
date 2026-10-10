@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://bj6s526sep4xw"]
+[gd_scene load_steps=16 format=3 uid="uid://bj6s526sep4xw"]
 
 [ext_resource type="Script" path="res://Scripts/file_manager.gd" id="1_x00ag"]
 [ext_resource type="Script" path="res://Scripts/settings.gd" id="2_7x3ll"]
@@ -10,7 +10,6 @@
 [ext_resource type="Script" path="res://Scripts/hyperlink.gd" id="11_m1mse"]
 [ext_resource type="Script" path="res://Scripts/camera.gd" id="12_x8fwh"]
 [ext_resource type="PackedScene" uid="uid://bjnhor4pywtgc" path="res://Scenes/comments.tscn" id="14_r0w3a"]
-[ext_resource type="AudioStream" uid="uid://bw4elmrq7utxl" path="res://Music/ES_Social Feedia - Heyson.wav" id="14_tdfqv"]
 
 [sub_resource type="Environment" id="Environment_7g1iw"]
 background_mode = 3
@@ -82,6 +81,7 @@ offset_bottom = 1342.0
 
 [node name="FileDialog" type="RichTextLabel" parent="."]
 unique_name_in_owner = true
+visible = false
 material = SubResource("ShaderMaterial_elmks")
 anchors_preset = 0
 offset_left = -492.0
@@ -101,6 +101,7 @@ autostart = true
 
 [node name="Settings" type="Node2D" parent="."]
 unique_name_in_owner = true
+visible = false
 
 [node name="SettingsList" parent="Settings" instance=ExtResource("5_6usn0")]
 unique_name_in_owner = true
@@ -115,6 +116,7 @@ unique_name_in_owner = true
 
 [node name="ThemeChooser" parent="ThemePicker" instance=ExtResource("6_10xx2")]
 unique_name_in_owner = true
+visible = false
 modulate = Color(1, 1, 1, 0)
 offset_left = -750.0
 offset_top = 17.0
@@ -124,6 +126,7 @@ script = ExtResource("9_ba634")
 
 [node name="Info" type="Node2D" parent="."]
 unique_name_in_owner = true
+visible = false
 modulate = Color(1, 1, 1, 0)
 position = Vector2(-1691.12, 0)
 
@@ -175,7 +178,6 @@ mouse_filter = 2
 color = Color(0.46455, 0.475028, 0.740924, 1)
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="."]
-stream = ExtResource("14_tdfqv")
 
 [node name="AudioTimer" type="Timer" parent="."]
 wait_time = 0.5

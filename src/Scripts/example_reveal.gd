@@ -55,7 +55,12 @@ func refresh_style() -> void:
 	size = Vector2(logical_width * 0.70 / 2.0, 160.0)
 	var caret: Vector2 = app.Code.get_caret_draw_pos()
 	var remaining_lines: int = app.Code.get_line_count() - 1 - app.Code.get_caret_line()
+	for line in range(app.Code.get_caret_line(), app.Code.get_line_count()):
+		remaining_lines += app.Code.get_line_wrap_count(line)
+	remaining_lines -= app.Code.get_caret_wrap_index()
 	position = app.Code.position + caret + Vector2(-logical_width * 0.36 / base_zoom, (remaining_lines + 1.4) * app.Code.get_line_height())
+	if app.Code.has_wrapped_content():
+		position.x = app.Code.position.x + app.Code.size.x * 0.5 - logical_width * 0.36 / base_zoom
 	layout_glyphs()
 	queue_redraw()
 

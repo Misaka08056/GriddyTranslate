@@ -1,11 +1,11 @@
 extends Node
 
-const ES_SOCIAL_FEEDIA___HEYSON = preload("res://Music/ES_Social Feedia - Heyson.wav")
+const ES_SOCIAL_FEEDIA___HEYSON = "res://Music/ES_Social Feedia - Heyson.wav"
 
-@onready var audio_stream_player: AudioStreamPlayer = $/root/Editor/AudioStreamPlayer
-@onready var timer: Timer = $/root/Editor/AudioTimer
+var audio_stream_player: AudioStreamPlayer
+var timer: Timer
 
-@onready var cam: Camera = $/root/Editor/Misc/Cam
+var cam: Camera
 
 var SONGS = [
 	{
@@ -19,9 +19,10 @@ var iter: int;
 
 var enabled: bool = false;
 
-func _ready():
-	play_random_song()
-
+func attach_editor(editor: Node) -> void:
+	audio_stream_player = editor.get_node("AudioStreamPlayer")
+	timer = editor.get_node("AudioTimer")
+	cam = editor.get_node("Misc/Cam")
 	audio_stream_player.finished.connect(play_random_song)
 
 	timer.timeout.connect(play_effects)
@@ -33,7 +34,8 @@ func play_random_song() -> void:
 	timer.stop()
 
 	var song = SONGS.pick_random()
-
+	if song.resource is String:
+		song.resource = load(song.resource)
 	audio_stream_player.stream = song.resource
 	audio_stream_player.play()
 	timer.start()

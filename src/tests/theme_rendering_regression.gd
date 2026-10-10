@@ -92,7 +92,7 @@ func run() -> void:
 	var frames: Array[float] = []
 	code.deselect()
 	var menu: OptionButton = app.get_node("ThemePicker/ThemeChooser")
-	code.toggle(menu, false, 18 * 28)
+	code.toggle(menu, false, 340)
 	await get_tree().create_timer(1.2).timeout
 	menu.open_menu()
 	await get_tree().create_timer(0.3).timeout

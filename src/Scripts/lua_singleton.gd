@@ -64,7 +64,17 @@ func load_system_font(font_name: String):
 
 
 func load_system_fonts() -> Array:
-	return Array(OS.get_system_fonts()).map(load_system_font)
+	# Listing names is cheap; resolving every family opens hundreds of font
+	# files before the first frame. Resolve only the font the user selects.
+	var catalog: Array = []
+	for font_name in OS.get_system_fonts():
+		catalog.append({"display": font_name, "value": null, "name": font_name})
+	return catalog
+
+func selected_font(index: int) -> Font:
+	if fonts[index].value == null:
+		fonts[index].value = load_system_font(fonts[index].name).value
+	return fonts[index].value
 
 
 var settings: Array = [
@@ -253,10 +263,14 @@ var discord_sdk: bool = false;
 const SUNLIGHT = preload("res://Shaders/sunlight.gdshader")
 const VHS_AND_CRT = preload("res://Shaders/vhs_and_crt.gdshader")
 
-@onready var editor: FileManager = $/root/Editor;
-@onready var code: CodeEdit = $/root/Editor/Code;
-@onready var world_environment: WorldEnvironment = $/root/Editor/WorldEnvironment
-@onready var shader_layer: ColorRect = $/root/Editor/ShaderLayer
+var editor: FileManager:
+	get: return get_node_or_null("/root/Editor")
+var code: CodeEdit:
+	get: return get_node_or_null("/root/Editor/Code")
+var world_environment: WorldEnvironment:
+	get: return get_node_or_null("/root/Editor/WorldEnvironment")
+var shader_layer: ColorRect:
+	get: return get_node_or_null("/root/Editor/ShaderLayer")
 
 
 
@@ -333,11 +347,12 @@ func handle_internal_setting_change(property: String, value: Variant) -> void:
 		code.minimap_width = value
 	if p == "editor_font":
 		if value < 0 or value >= fonts.size(): return
-		var selected_font: Font = prepare_font(fonts[value].value)
+		var selected_font: Font = prepare_font(selected_font(value))
 		editor_theme.set_font("normal_font", "RichTextLabel", selected_font)
 		editor_theme.set_font("font", "Label", selected_font)
 		editor_theme.set_font("font", "CodeEdit", selected_font)
 		editor_theme.set_font("font", "Button", selected_font)
+		code.refresh_wrapping()
 		if is_instance_valid(editor.example_label): editor.example_label.refresh_style()
 
 	if p == "translation_auto":
@@ -350,6 +365,8 @@ func handle_internal_setting_change(property: String, value: Variant) -> void:
 		editor.on_provider_changed(value)
 	if p == "translation_placement":
 		editor.on_translation_placement_changed(value)
+	if p in ["auto_wrap", "wrap_characters"]:
+		code.refresh_wrapping()
 	if p == "obsidian_sync" and is_instance_valid(editor.wordbook):
 		editor.wordbook.set_sync_enabled(value)
 	if p == "screen_motion":
@@ -423,6 +440,9 @@ func configure_translator_settings(default_font: Font) -> void:
 	settings.append({"property": "display_examples", "display": "Show Examples / 显示例句", "icon": "󰉿", "value": true, "options": []})
 	settings.append({"property": "translation_provider", "display": "Translation Source / 翻译来源", "icon": "󰗊", "value": 1, "options": [{"display": "MyMemory / 免密钥", "value": "mymemory"}, {"display": "有道 / 免密钥体验", "value": "youdao"}]})
 	settings.append({"property": "translation_placement", "display": "译文位置 / Translation Layout", "icon": "󰉿", "value": 0, "options": [{"display": "替换原文", "value": 0}, {"display": "保留原文 · 下一行译文", "value": 1}]})
+	settings.append({"property": "auto_wrap", "display": "自动换行 / Auto Wrap", "icon": "󰌑", "value": true, "options": []})
+	settings.append({"property": "wrap_characters", "display": "每行长度 / Wrap Length", "icon": "󰘖", "value": 40, "min": 10, "max": 120, "unit": "字符宽", "options": []})
+	settings.append({"property": "startup_animation", "display": "开屏动画 / Startup Animation", "icon": "󰕧", "value": true, "options": []})
 	settings.append({"property": "screen_motion", "display": "屏幕晃动 / Screen Motion", "icon": "󰁨", "value": true, "options": []})
 	settings.append({"property": "settings_animation_speed", "display": "设置动画速度 / Animation Speed", "icon": "󱕒", "value": 100, "min": 25, "max": 300, "unit": "%", "options": []})
 	settings.append({"property": "view_zoom", "display": "缩放比例 / Zoom", "icon": "", "value": 100, "min": 50, "max": 200, "unit": "%", "options": []})

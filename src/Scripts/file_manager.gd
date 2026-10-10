@@ -41,8 +41,12 @@ var pronunciation: Node
 var wordbook: Node
 var result_provider := "youdao"
 var current_example: Dictionary = {}
+var _startup_overlay: Node
 
 func _ready() -> void:
+	_startup_overlay = get_node_or_null("/root/Startup")
+	_startup_trace("editor_enter")
+	Music.attach_editor(self)
 	service = Service.new()
 	add_child(service)
 	pronunciation = Pronunciation.new()
@@ -61,26 +65,32 @@ func _ready() -> void:
 	debounce.timeout.connect(request_translation)
 	add_child(debounce)
 	LuaSingleton.configure_translator_settings(Code.get_theme_font("font"))
+	_startup_trace("services_ready")
 	_load_preferences()
 	wordbook = Wordbook.new()
 	wordbook.name = "WordbookController"
 	add_child(wordbook)
 	wordbook.setup(self)
+	_startup_trace("wordbook_ready")
 	DirAccess.make_dir_recursive_absolute("user://themes")
 	for file in DirAccess.get_files_at("res://Lua/Themes"):
 		if file.ends_with(".lua"):
-			var destination := FileAccess.open("user://themes/" + file, FileAccess.WRITE)
-			destination.store_string(FileAccess.get_file_as_string("res://Lua/Themes/" + file))
+			var theme_path := "user://themes/" + file
+			var theme_source := FileAccess.get_file_as_string("res://Lua/Themes/" + file)
+			if not FileAccess.file_exists(theme_path) or FileAccess.get_file_as_string(theme_path) != theme_source:
+				var destination := FileAccess.open(theme_path, FileAccess.WRITE)
+				if destination != null: destination.store_string(theme_source)
 	LuaSingleton.setup_theme(LuaSingleton.theme)
+	_startup_trace("theme_ready")
 	for setting in LuaSingleton.settings:
 		LuaSingleton.handle_internal_setting_change(setting.property, setting.value)
+	_startup_trace("preferences_applied")
 	Code.gutters_draw_line_numbers = false
 	Code.code_completion_enabled = false
 	Code.minimap_draw = false
 	Code.draw_tabs = false
 	Code.draw_spaces = false
 	Code.text = ""
-	file_dialog.setup()
 	Code.grab_focus()
 	DisplayServer.window_set_title("GriddyTranslate")
 	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--visual-test"):
@@ -112,6 +122,18 @@ func _ready() -> void:
 	for suite in ["wordbook-storage", "obsidian", "wordbook-ui", "wordbook", "wordbook-live"]:
 		if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--" + suite + "-test"):
 			_run_wordbook_test.call_deferred(suite)
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--startup-wrap-test"):
+		call_deferred("_run_startup_wrap_test")
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--native-startup-test"):
+		add_child(load("res://tests/native_startup_regression.gd").new())
+	set_meta("ready_ms", Time.get_ticks_msec())
+
+func _run_startup_wrap_test() -> void:
+	add_child(load("res://tests/startup_wrap_regression.gd").new())
+
+func _startup_trace(stage: String) -> void:
+	if OS.get_cmdline_user_args().has("--startup-profile"):
+		print("STARTUP_STAGE %s=%d" % [stage, Time.get_ticks_msec()])
 
 func _run_wordbook_test(suite: String) -> void:
 	var scripts := {"wordbook-storage": "wordbook_storage_regression", "obsidian": "obsidian_sync_regression", "wordbook-ui": "wordbook_ui_regression", "wordbook": "wordbook_regression", "wordbook-live": "wordbook_live_validation"}
@@ -156,6 +178,11 @@ func _run_examples_test() -> void:
 	add_child(load("res://tests/example_visual.gd").new())
 
 func _input(event: InputEvent) -> void:
+	# Scene input is dispatched in reverse tree order. Forward to the splash
+	# first so Escape/Ctrl shortcuts cannot be consumed by the editor behind it.
+	if is_instance_valid(_startup_overlay) and _startup_overlay.consume_startup_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if not event is InputEventKey or not event.pressed: return
 	if event.echo:
 		if is_instance_valid(wordbook) and wordbook.is_active() and wordbook.panel.handle_key(event): get_viewport().set_input_as_handled()
@@ -177,7 +204,7 @@ func _input(event: InputEvent) -> void:
 		LuaSingleton.change_setting("fullscreen", not LuaSingleton.get_setting("fullscreen")[0].value)
 		LuaSingleton.on_settings_change.emit()
 	elif control and key == KEY_COMMA: Code.toggle(%Settings, true, (18 * 7.5) * 2)
-	elif control and key == KEY_T: Code.toggle(%ThemeChooser, false, (18 * 28))
+	elif control and key == KEY_T: Code.toggle(%ThemeChooser, false, 340)
 	elif control and key == KEY_I: Code.toggle(%Info, true, 1500)
 	elif control and key == KEY_B: wordbook.toggle_panel()
 	elif control and key == KEY_D:
@@ -454,7 +481,7 @@ func close_active_panel() -> void:
 		var node = Code.active_overlay
 		if node == %Settings: Code.toggle(node, true, (18 * 7.5) * 2)
 		elif node == %Info: Code.toggle(node, true, 1500)
-		elif node == %ThemeChooser: Code.toggle(node, false, (18 * 28))
+		elif node == %ThemeChooser: Code.toggle(node, false, 340)
 		else:
 			Code.toggle(node)
 			get_tree().create_timer(Code.panel_duration() + 0.03).timeout.connect(restore_input_focus)

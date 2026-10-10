@@ -24,13 +24,8 @@ var _catalog: Array = []
 var _row_styles: Dictionary = {}
 var _styles_applied := false
 var _button_palette: Array = []
-var _anchor_pose: Dictionary = {}
-var _locked_transform := Transform2D.IDENTITY
-var _locked_anchor := Rect2()
-var _anchor_window := Vector2.ZERO
 var _layout_window := Vector2.ZERO
-var _viewport_transform := Transform2D.IDENTITY
-var _anchor_return: Tween
+var _menu_down := true
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -142,13 +137,13 @@ func open_menu() -> void:
 	active_menu = self
 	_open = true
 	grab_focus()
-	_lock_anchor()
 	_build_menu()
 	var previous := _focused
 	_focused = selected
 	_refresh_styles()
 	_style_row(previous)
 	_style_row(_focused)
+	_layout_window = Vector2.ZERO
 	_align_menu()
 	_screen.show()
 	_layer.show()
@@ -168,7 +163,6 @@ func close_menu(restore_focus: bool = true) -> void:
 	# on Godot 4.2. Hide the CanvasItem root as well before releasing focus.
 	if is_instance_valid(_screen): _screen.hide()
 	if is_instance_valid(_layer): _layer.hide()
-	_release_anchor()
 	if active_menu == self: active_menu = null
 	if restore_focus and is_visible_in_tree(): grab_focus()
 
@@ -218,7 +212,7 @@ func _next_enabled(from: int, direction: int) -> int:
 
 func _build_menu() -> void:
 	var source_font := get_theme_font("font")
-	var screen_scale := _locked_transform.get_scale().y
+	var screen_scale := (get_viewport().get_final_transform() * get_global_transform_with_canvas()).get_scale().y
 	var font_size := clampi(roundi(get_theme_font_size("font_size") * absf(screen_scale)), 16, 20)
 	var catalog: Array = []
 	for index in item_count: catalog.append([get_item_text(index), is_item_disabled(index)])
@@ -377,70 +371,35 @@ func _refresh_button_style() -> void:
 func _align_menu() -> void:
 	if not _open or not is_instance_valid(_panel): return
 	var viewport_size := Vector2(get_window().size)
-	if _layout_window == viewport_size: return
-	_layout_window = viewport_size
 	# Canvas item stretching otherwise scales an already positioned menu again.
 	# Counter it so one list unit and one font pixel equal one window pixel.
 	_layer.transform = get_viewport().get_final_transform().affine_inverse()
-	var anchor := _locked_anchor
-	var width := maxf(anchor.size.x, _content_width)
-	width = clampf(width, minf(220.0, viewport_size.x - 24.0), viewport_size.x - 24.0)
-	var below := viewport_size.y - anchor.end.y - 16.0
-	var above := anchor.position.y - 16.0
-	var down := below >= minf(160.0, above)
-	var available := below if down else above
-	var height := minf((_font_size + 18.0) * item_count + 12.0, minf(viewport_size.y * 0.72, maxf(available, 40.0)))
+	var anchor := anchor_rect()
+	# Height and direction stay steady. The width may follow an unfinished
+	# focus zoom, using cached measurements rather than reshaping every row.
+	var target_width := roundf(clampf(maxf(anchor.size.x, _content_width), minf(220.0, viewport_size.x - 24.0), viewport_size.x - 24.0))
+	if _layout_window != viewport_size:
+		_layout_window = viewport_size
+		var width := clampf(maxf(anchor.size.x, _content_width), minf(220.0, viewport_size.x - 24.0), viewport_size.x - 24.0)
+		var below := viewport_size.y - anchor.end.y - 16.0
+		var above := anchor.position.y - 16.0
+		_menu_down = below >= minf(160.0, above)
+		var available := below if _menu_down else above
+		var height := minf((_font_size + 18.0) * item_count + 12.0, minf(viewport_size.y * 0.72, maxf(available - 10.0, 40.0)))
+		_panel.custom_minimum_size = Vector2.ZERO
+		_panel.size = Vector2(roundf(width), roundf(height))
+	if not is_equal_approx(_panel.size.x, target_width): _panel.size.x = target_width
+	var width := _panel.size.x
+	var height := _panel.size.y
 	var left := clampf(anchor.position.x, 12.0, viewport_size.x - width - 12.0)
-	var top := anchor.end.y + 4.0 if down else anchor.position.y - height - 4.0
-	_panel.position = Vector2(roundf(left), roundf(clampf(top, 12.0, viewport_size.y - height - 12.0)))
-	_panel.custom_minimum_size = Vector2.ZERO
-	_panel.size = Vector2(roundf(width), roundf(height))
-
-func _lock_anchor() -> void:
-	if _anchor_return != null: _anchor_return.kill()
-	if _anchor_pose.is_empty():
-		_anchor_pose = {"position": position, "rotation": rotation, "scale": scale, "z_index": z_index}
-	var camera := get_tree().current_scene.get_node_or_null("Misc/Cam")
-	if is_instance_valid(camera): camera.force_update_scroll()
-	_locked_transform = get_viewport().get_final_transform() * get_global_transform_with_canvas()
-	_locked_anchor = anchor_rect()
-	_anchor_window = Vector2(get_window().size)
-	_viewport_transform = get_viewport().get_final_transform()
-	_layout_window = Vector2.ZERO
-	z_index = 20
+	var top := anchor.end.y + 4.0 if _menu_down else anchor.position.y - height - 4.0
+	_panel.position = Vector2(left, clampf(top, 12.0, viewport_size.y - height - 12.0))
 
 func _sync_menu() -> void:
-	if not _open or _anchor_pose.is_empty(): return
+	if not _open: return
 	var camera := get_tree().current_scene.get_node_or_null("Misc/Cam")
 	if is_instance_valid(camera): camera.force_update_scroll()
-	if _anchor_window != Vector2(get_window().size) or not _viewport_transform.is_equal_approx(get_viewport().get_final_transform()):
-		position = _anchor_pose.position
-		rotation = _anchor_pose.rotation
-		scale = _anchor_pose.scale
-		_lock_anchor()
-	var canvas_to_screen := get_viewport().get_final_transform() * get_canvas_transform()
-	var world: Transform2D = canvas_to_screen.affine_inverse() * _locked_transform
-	var local: Transform2D = get_parent().get_global_transform().affine_inverse() * world
-	position = local.origin
-	rotation = local.get_rotation()
-	scale = local.get_scale()
 	_align_menu()
-
-func _release_anchor() -> void:
-	if _anchor_pose.is_empty(): return
-	z_index = _anchor_pose.z_index
-	if not is_inside_tree() or not is_visible_in_tree() or is_queued_for_deletion():
-		position = _anchor_pose.position
-		rotation = _anchor_pose.rotation
-		scale = _anchor_pose.scale
-		_anchor_pose.clear()
-		return
-	_anchor_return = create_tween().set_parallel(true)
-	_anchor_return.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_anchor_return.tween_property(self, "position", _anchor_pose.position, 0.12)
-	_anchor_return.tween_property(self, "rotation", _anchor_pose.rotation, 0.12)
-	_anchor_return.tween_property(self, "scale", _anchor_pose.scale, 0.12)
-	_anchor_return.chain().tween_callback(func(): _anchor_pose.clear())
 
 func _reveal_focused() -> void:
 	if _open and _focused >= 0 and _focused < _rows.size():
@@ -461,6 +420,5 @@ func _visibility_changed() -> void:
 func _exit_tree() -> void:
 	close_menu(false)
 	if is_instance_valid(_layer): _layer.queue_free()
-	if _anchor_return != null: _anchor_return.kill()
 	if RenderingServer.frame_pre_draw.is_connected(_sync_menu):
 		RenderingServer.frame_pre_draw.disconnect(_sync_menu)

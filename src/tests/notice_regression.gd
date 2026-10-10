@@ -32,9 +32,15 @@ func run() -> void:
 	app.warn("已收藏：manipulate · 操纵；操作")
 	var notice := current_notice()
 	await get_tree().process_frame
-	await get_tree().create_timer(0.075).timeout
+	# Advance the real tween at a known point. Wall-clock timers can resume
+	# before a tween, or after first-use MSDF generation skipped that interval.
+	while not notice._presented: await get_tree().process_frame
+	notice._animation.pause()
+	notice._animation.custom_step(0.08)
+	await RenderingServer.frame_post_draw
 	check(notice.position.x < -5 and notice.modulate.a > 0 and notice.modulate.a < 1, "notice enters from the left with an interpolated fade")
 	await capture("notice-enter")
+	notice._animation.play()
 	await get_tree().create_timer(0.4).timeout
 	check(absf(notice.position.x) < 0.01 and notice.modulate.a == 1 and notice.scale.is_equal_approx(Vector2.ONE), "notice settles at its original top-left anchor without continued shaking")
 	check(notice.mouse_filter == Control.MOUSE_FILTER_IGNORE and notice.rich_text_label.mouse_filter == Control.MOUSE_FILTER_IGNORE, "notice and message allow mouse input to reach underlying controls")
@@ -59,9 +65,12 @@ func run() -> void:
 	check(replacement.size.y > 82 and replacement.rich_text_label.get_content_height() + 34 <= replacement.size.y + 1, "long bilingual notices grow vertically and keep the final line visible")
 	await capture("notice-long")
 	replacement.dismiss()
-	await get_tree().create_timer(0.10).timeout
+	replacement._animation.pause()
+	replacement._animation.custom_step(0.10)
+	await RenderingServer.frame_post_draw
 	check(is_instance_valid(replacement) and replacement.modulate.a < 1 and replacement.modulate.a > 0 and replacement.position.x < 0, "dismissal slides and fades rather than disappearing immediately")
 	await capture("notice-exit")
+	replacement._animation.play()
 	await get_tree().create_timer(0.25).timeout
 	check(not is_instance_valid(replacement), "dismissed notices release their nodes after the exit animation")
 	app.warn("这条通知会在停留后自动消失。")

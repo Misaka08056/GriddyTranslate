@@ -1,11 +1,13 @@
 # GriddyTranslate development
 
-Develop the Godot project in src. Use Godot 4.2.2; run setup-build.ps1 and build.ps1 from the project root. The Windows portable package is packages/GriddyTranslate-Windows.zip.
+The user chose `D:\Documents\GriddyTranslate` as the permanent home for this project. Develop in `src`, build with `build.ps1`, and distribute `packages/GriddyTranslate-Windows.zip`. Do not develop in the older dated Codex checkout.
 
-This is a direct GriddyCode fork. Preserve its original canvas, HDR glow, fonts, shortcuts, animated overlays and caret focus. Use the Ctrl+comma settings panel for new options, with no persistent toolbar.
+This is a direct GriddyCode Godot fork. Preserve its original canvas, HDR glow, fonts, shortcuts, animated overlays and focus behavior. Put new options in the existing Ctrl+comma settings panel; do not introduce persistent toolbars or a separate translator UI.
 
-Use export-debug and the matching Lua debug DLL with the verified runtime template. Accept an export only after packaged regression and graphical update tests pass. Keep runtime and launcher paths relative to the unpacked package.
+The portable entry point is a native Windows launcher (`tools/launcher.c`) that starts its adjacent `GriddyTranslate.runtime.exe` with scoped RTSS compatibility variables. Keep all executable/PCK/Lua DLL paths relative to the unpacked app folder, with no dependency on the user's GriddyCode installation.
 
-Preserve preferences and in-memory user text. Tests use --test to isolate preferences. Keep logs, captures and local validation in qa. Update the usage guide and repair explanations when behavior changes. Do not commit build outputs, local tools, credentials or user preferences.
+Use the bundled Godot 4.2.2. The current custom template has debug features, so export-debug and the matching Lua debug DLL are required. A post-export LuaAPI unload crash is not proof of a working build: accept the output only after packaged regression and graphical update tests pass. Build scripts stop on parse/load errors.
 
-The user requires every completed, verified update to be synchronized to `https://github.com/Misaka08056/GriddyTranslate`, including the corresponding tested portable ZIP in GitHub Releases. This standing request authorizes future synchronization; do not ask for the same permission again. Exclude QA data, credentials, preferences and wordbook/vault contents from source commits and release packages.
+Preserve user settings in the independent GriddyTranslate user-data directory and do not reset their text or preferences during updates. `--test` isolates preferences. Test logs, captures and unpacked validation live in `qa`. Keep the usage guide and repair explanation current.
+
+Prepare and verify updates locally. The user now requires confirmation before any synchronization to `https://github.com/Misaka08056/GriddyTranslate` or GitHub Release publication. Do not push, update remote refs, upload assets or publish until the user approves the particular update. This supersedes the earlier automatic synchronization request. Exclude local tools, QA data, credentials, preferences and wordbook/vault contents from source commits and release packages.

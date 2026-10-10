@@ -6,6 +6,7 @@ var dragging_sliders: Array[HSlider] = []
 var stable_controls: Dictionary = {}
 var resting_poses: Dictionary = {}
 var return_tweens: Dictionary = {}
+var _settings_dirty := true
 
 
 # Called when the node enters the scene tree for the first time.
@@ -16,10 +17,14 @@ func _ready():
 
 	setup_settings()
 	LuaSingleton.on_theme_load.connect(_refresh_theme_colors)
-	visibility_changed.connect(_refresh_theme_colors)
+	visibility_changed.connect(_visibility_refresh)
 	LuaSingleton.on_settings_change.connect(setup_settings);
 
 func setup_settings() -> void:
+	if not is_visible_in_tree():
+		_settings_dirty = true
+		return
+	_settings_dirty = false
 	release_slider_interactions()
 	for child in get_children():
 		child.queue_free()
@@ -31,6 +36,11 @@ func setup_settings() -> void:
 		var precision = setting.precision if setting.has("precision") else false;
 
 		create_setting(setting.display, setting.icon, setting.value, setting.options, setting.property, unit, _min, _max, precision, setting.get("action", false))
+
+func _visibility_refresh() -> void:
+	if not is_visible_in_tree(): return
+	if _settings_dirty: setup_settings()
+	else: _refresh_theme_colors()
 
 
 

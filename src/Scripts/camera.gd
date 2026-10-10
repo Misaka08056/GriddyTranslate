@@ -52,10 +52,7 @@ func _process(delta: float) -> void:
 	if busy or returning_from_panel: return;
 
 	var final_zoom := Vector2.ONE * (content_base_zoom() * user_zoom + pulse)
-	var char_size: Vector2 = get_font_metrics();
-	var gp = code.get_caret_draw_pos();
-
-	gp.x -= 2*char_size.x;
+	var gp := editor_focus_position()
 
 	# One continuous focus response avoids hundreds of overlapping camera tweens.
 	var response := 1.0 - exp(-delta * 6.0)
@@ -63,7 +60,20 @@ func _process(delta: float) -> void:
 	global_position = global_position.lerp(gp, response)
 
 func content_base_zoom() -> float:
-	return clampf(max_zoom.x - (code.get_longest_line().length() + 1) / SCALE, min_zoom.x, max_zoom.x)
+	var result := clampf(max_zoom.x - (code.get_longest_line().length() + 1) / SCALE, min_zoom.x, max_zoom.x)
+	if code.has_wrapped_content():
+		result = minf(result, get_viewport_rect().size.x * 0.82 / maxf(code.size.x, 1.0))
+	return result
+
+func editor_focus_position() -> Vector2:
+	var target: Vector2 = code.get_caret_draw_pos()
+	if code.has_wrapped_content():
+		# Follow the active row vertically, and center the wrapped text block
+		# horizontally so a caret at column zero cannot push half the row offscreen.
+		target.x = code.size.x * 0.5
+	else:
+		target.x -= 2 * get_font_metrics().x
+	return target
 
 func set_motion_enabled(value: bool) -> void:
 	motion_enabled = value
@@ -88,8 +98,7 @@ func focus_die() -> void:
 	returning_from_panel = false
 	if was_busy:
 		returning_from_panel = true
-		var target_position: Vector2 = code.get_caret_draw_pos()
-		target_position.x -= 2 * get_font_metrics().x
+		var target_position: Vector2 = editor_focus_position()
 		focus_tween = create_tween()
 		focus_tween.parallel().tween_property(self, "global_position", target_position, transition_speed)
 		focus_tween.parallel().tween_property(self, "zoom", Vector2.ONE * content_base_zoom() * user_zoom, transition_speed)
