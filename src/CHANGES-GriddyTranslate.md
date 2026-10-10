@@ -1,12 +1,16 @@
 # GriddyTranslate: independent translation fork
 
-## v0.3.0：启动、开屏与换行
+## 未发布：窗口无边框
+
+- 在 Ctrl+逗号设置中加入“无边框 / Borderless”开关，即时隐藏或恢复系统标题栏和边框，默认关闭。选择随现有偏好保存，退出全屏时恢复所选状态。
+
+## 本地预览：启动、开屏与换行
 
 - 系统字体只列名称，选择后才解析字体文件；关闭音乐时不加载整首音频，设置与单词本面板首次打开时才构建。主题资源不再每次启动重复写入。
 - 重做赛博朋克开屏，首页名称改为 cybertranslator。原生启动器先播放 1920×1080 动画帧，覆盖 Godot 引擎初始化空白，编辑器在后方加载；参考视频的完整约 11 秒节奏与锐角黄色字标保留。完整 logo 实际显示至少半秒、编辑器首帧完成后才接受按键或点击跳过；跳过与自然结束均有约 0.45 秒退场，连按不会截断。设置关闭后不加载动画；直接 runtime 启动保留内置 Godot 开屏备用。便携包使用 Windows 内置 WIC，无外部播放器依赖。
 - Ctrl+T 的紧凑主题按钮向左移动，给原文输入留出间隔；下拉菜单在最终绘制前跟随按钮位置，不再冻结按钮，不对位移四舍五入。菜单大小和展开方向保持稳定，窗口缩放时重新布局。
 - 新增自动软换行及 10–120 字符宽的每行长度调节，默认 40。按显示宽度换行，中文通常约占两个英文字符宽；不往原文加入真实换行，翻译、例句、复制和撤销保留原始文本。原文与译文都适用，镜头按可见行调整缩放。
-- 本版发布独立 Windows 便携包，解压完整目录即可启动。
+- 本次仅生成本地测试便携包，按用户的新要求，GitHub 同步与 Release 发布均等待用户确认。
 
 ## 文字高亮、主题帧率与菜单稳定
 
@@ -96,4 +100,3 @@ godot --path . -- --test --wordbook-test
 For graphical tests set `GRIDDY_TEST_OUTPUT` to an absolute capture directory. `--test` isolates preferences. Tests also run from the exported exe. Actual Vulkan checks on the GTX 1080 supplement headless tests.
 
 Original repository, engine and bundled Symbols Nerd Font licenses are included.
-

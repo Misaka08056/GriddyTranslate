@@ -378,6 +378,9 @@ func handle_internal_setting_change(property: String, value: Variant) -> void:
 		editor.get_node("Misc/Cam").user_zoom = float(value) / 100.0
 	if p == "fullscreen":
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if value else DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, bool(get_setting("borderless")[0].value))
+	if p == "borderless":
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, bool(value))
 	# SHADERS
 	if p == "glow":
 		world_environment.environment.glow_enabled = value
@@ -447,6 +450,7 @@ func configure_translator_settings(default_font: Font) -> void:
 	settings.append({"property": "settings_animation_speed", "display": "设置动画速度 / Animation Speed", "icon": "󱕒", "value": 100, "min": 25, "max": 300, "unit": "%", "options": []})
 	settings.append({"property": "view_zoom", "display": "缩放比例 / Zoom", "icon": "", "value": 100, "min": 50, "max": 200, "unit": "%", "options": []})
 	settings.append({"property": "fullscreen", "display": "全屏 / Fullscreen · F11", "icon": "󰊓", "value": false, "options": []})
+	settings.append({"property": "borderless", "display": "无边框 / Borderless", "icon": "󰊓", "value": false, "options": []})
 	settings.append({"property": "obsidian_sync", "display": "Obsidian 自动同步", "icon": "󰘓", "value": true, "options": []})
 	settings.append({"property": "obsidian_vault", "display": "Obsidian 保管库", "icon": "󰉋", "value": "选择保管库…", "options": [], "action": true})
 	settings.append({"property": "obsidian_folder", "display": "单词本同步文件夹", "icon": "󰉋", "value": "GriddyTranslate/单词本", "options": [], "action": true})
