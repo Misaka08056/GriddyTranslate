@@ -67,12 +67,9 @@ func content_base_zoom() -> float:
 
 func editor_focus_position() -> Vector2:
 	var target: Vector2 = code.get_caret_draw_pos()
-	if code.has_wrapped_content():
-		# Follow the active row vertically, and center the wrapped text block
-		# horizontally so a caret at column zero cannot push half the row offscreen.
-		target.x = code.size.x * 0.5
-	else:
-		target.x -= 2 * get_font_metrics().x
+	# Godot supplies the actual visual row/column after soft wrapping. Keep
+	# following that caret horizontally as well as vertically, like the original.
+	target.x -= 2 * get_font_metrics().x
 	return target
 
 func set_motion_enabled(value: bool) -> void:

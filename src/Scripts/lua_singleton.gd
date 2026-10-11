@@ -358,6 +358,8 @@ func handle_internal_setting_change(property: String, value: Variant) -> void:
 	if p == "translation_auto":
 		editor.auto_translate = value
 		editor.on_auto_translation_changed()
+	if p == "translation_delay":
+		editor.on_translation_delay_changed(int(value))
 	if p == "display_examples":
 		editor.examples_enabled = value
 		editor.on_examples_changed()
@@ -445,6 +447,7 @@ func configure_translator_settings(default_font: Font) -> void:
 			preserved.append(setting)
 	settings = preserved
 	settings.append({"property": "translation_auto", "display": "Auto Translation", "icon": "󰗊", "value": false, "options": []})
+	settings.append({"property": "translation_delay", "display": "自动翻译等待时间", "icon": "󰔛", "value": 500, "min": 100, "max": 5000, "unit": "ms", "options": [], "inline_with": "translation_auto"})
 	settings.append({"property": "display_examples", "display": "Show Examples / 显示例句", "icon": "󰉿", "value": true, "options": []})
 	settings.append({"property": "translation_provider", "display": "Translation Source / 翻译来源", "icon": "󰗊", "value": 1, "options": [{"display": "MyMemory / 免密钥", "value": "mymemory"}, {"display": "有道 / 免密钥体验", "value": "youdao"}]})
 	settings.append({"property": "translation_placement", "display": "译文位置 / Translation Layout", "icon": "󰉿", "value": 0, "options": [{"display": "替换原文", "value": 0}, {"display": "保留原文 · 下一行译文", "value": 1}]})

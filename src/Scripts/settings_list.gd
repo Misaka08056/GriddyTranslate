@@ -30,6 +30,7 @@ func setup_settings() -> void:
 		child.queue_free()
 
 	for setting in LuaSingleton.settings:
+		if setting.has("inline_with"): continue
 		var unit = setting.unit if setting.has("unit") else "";
 		var _min = setting.min if setting.has("min") else 0;
 		var _max = setting.max if setting.has("max") else 0;
@@ -51,6 +52,8 @@ func create_setting(text: String, icon: String, value: Variant, options: Array, 
 	add_child(node)
 
 	var slider: HSlider = node.get_node("Control2/HSlider")
+	var slider_property := property
+	var slider_unit := unit
 	slider.set_meta("setting_property", property)
 	slider.mouse_filter = Control.MOUSE_FILTER_STOP if sliders_interactive else Control.MOUSE_FILTER_IGNORE
 	var checkbutton: CheckButton = node.get_node("Control2/CheckButton");
@@ -100,7 +103,25 @@ func create_setting(text: String, icon: String, value: Variant, options: Array, 
 		slider.show()
 		slider.value = value
 
-	slider.value_changed.connect(_slider_value_change.bind(property, value_label, unit))
+	if property == "translation_auto":
+		var delay: Dictionary = LuaSingleton.get_setting("translation_delay")[0]
+		slider_property = delay.property
+		slider_unit = delay.unit
+		slider.set_meta("setting_property", slider_property)
+		node.get_meta("setting_style").unit = slider_unit
+		slider.min_value = delay.min
+		slider.max_value = delay.max
+		slider.step = 100
+		slider.position = Vector2(424, 0)
+		slider.size = Vector2(124, 27)
+		slider.value = delay.value
+		slider.tooltip_text = "停止输入后等待多久再翻译 / Delay after typing (100–5000 ms)"
+		value_label.position.x = 564
+		value_label.show()
+		slider.show()
+		set_label(value_label, slider_unit, delay.value)
+
+	slider.value_changed.connect(_slider_value_change.bind(slider_property, value_label, slider_unit))
 	slider.gui_input.connect(_slider_input.bind(slider))
 	slider.drag_started.connect(_begin_slider_interaction.bind(slider))
 	slider.drag_ended.connect(_end_slider_drag.bind(slider))
@@ -233,7 +254,7 @@ func _notification(what: int) -> void:
 func set_label(value_label: RichTextLabel, unit: String, value: float) -> void:
 	value_label.clear()
 
-	value_label.add_text(str(value) + " ")
+	value_label.add_text((str(int(value)) if is_equal_approx(value, roundf(value)) else str(value)) + " ")
 
 	value_label.push_color(LuaSingleton.gui.selection_color)
 	value_label.add_text(unit)

@@ -1,4 +1,4 @@
-param([switch]$SkipTests, [switch]$StartupOnly, [switch]$LauncherOnly, [string]$OutputDirectory)
+param([switch]$SkipTests, [switch]$StartupOnly, [switch]$LauncherOnly, [string]$OutputDirectory, [ValidateSet('regression','update','slider','pronunciation','menu','startup-wrap','theme-rendering','dispatch','translation-performance','wordbook-storage','obsidian','wordbook-ui','wordbook','notice','editing')][string[]]$TestSuites)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $sourceDir = Join-Path $projectRoot 'src'
@@ -52,7 +52,7 @@ Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tools\licenses') -File | For
 
 if (!$SkipTests) {
     if (!$LauncherOnly) {
-    $suites = if ($StartupOnly) { @('startup-wrap') } else { @('regression','update','slider','pronunciation','menu','startup-wrap','theme-rendering','dispatch','translation-performance','wordbook-storage','obsidian','wordbook-ui','wordbook','notice') }
+    $suites = if ($TestSuites) { $TestSuites } elseif ($StartupOnly) { @('startup-wrap') } else { @('regression','update','slider','pronunciation','menu','startup-wrap','theme-rendering','dispatch','translation-performance','wordbook-storage','obsidian','wordbook-ui','wordbook','notice','editing') }
     foreach ($testName in $suites) {
         $env:GRIDDY_TEST_OUTPUT = Join-Path $qaDir ('packaged-' + $testName)
         $testLog = Join-Path $qaDir ('packaged-' + $testName + '.log')
@@ -79,10 +79,12 @@ if (!$SkipTests) {
             'wordbook-ui' { 'WORD_BOOK_UI_TEST_PASS' }
             'wordbook' { 'WORDBOOK_REGRESSION_COMPLETE failures=0' }
             'notice' { 'NOTICE_REGRESSION_COMPLETE failures=0' }
+            'editing' { 'EDITING_REGRESSION_COMPLETE failures=0' }
         }
         if ($testProcess.ExitCode -ne 0 -or $testOutput -notmatch $completion -or $testOutput -match '(?m)^FAIL ' -or $testErrors -match 'SCRIPT ERROR|Parse Error') { throw "Runtime verification failed: $testName. See $testLog and $testErr" }
         Write-Output "Verified packaged $testName test."
     }
+    if (!$TestSuites) {
     foreach ($mode in @('skip','disabled')) {
         $env:GRIDDY_TEST_OUTPUT = Join-Path $qaDir ('packaged-startup-' + $mode)
         $testLog = Join-Path $qaDir ('packaged-startup-' + $mode + '.log')
@@ -98,6 +100,8 @@ if (!$SkipTests) {
         Write-Output "Verified packaged startup $mode test."
     }
     }
+    }
+    if (!$TestSuites) {
     foreach ($mode in @('natural','skip','disabled')) {
         $env:GRIDDY_TEST_OUTPUT = Join-Path $qaDir ('packaged-native-' + $mode)
         New-Item -ItemType Directory -Path $env:GRIDDY_TEST_OUTPUT -Force | Out-Null
@@ -123,6 +127,7 @@ if (!$SkipTests) {
         } elseif ($runtime.native -or $native.first_paint_ms -ne 0) { throw 'Disabled startup unexpectedly loaded the native animation.' }
         Write-Output "Verified portable launcher $mode test (first paint: $($native.first_paint_ms) ms)."
     }
+    }
 }
 $zipPath = Join-Path $packageDir 'GriddyTranslate-Windows.zip'
 # A separate update checkout must still unpack to the usual portable folder.
@@ -139,7 +144,7 @@ try {
     }
 } finally { $archive.Dispose() }
 Move-Item -LiteralPath $zipTemporary -Destination $zipPath -Force
-$manifest = [ordered]@{ generatedAt=(Get-Date).ToString('o'); project=$projectRoot; zip=$zipPath; sha256=(Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash; bytes=(Get-Item -LiteralPath $zipPath).Length; tested=(!$SkipTests); verification=$(if ($LauncherOnly) { 'native-startup' } elseif ($StartupOnly) { 'startup' } else { 'full' }) }
+$manifest = [ordered]@{ generatedAt=(Get-Date).ToString('o'); project=$projectRoot; zip=$zipPath; sha256=(Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash; bytes=(Get-Item -LiteralPath $zipPath).Length; tested=(!$SkipTests); verification=$(if ($TestSuites) { $TestSuites -join ',' } elseif ($LauncherOnly) { 'native-startup' } elseif ($StartupOnly) { 'startup' } else { 'full' }) }
 $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $packageDir 'manifest.json') -Encoding utf8
 ($manifest.sha256.ToLowerInvariant() + '  GriddyTranslate-Windows.zip') | Set-Content -LiteralPath (Join-Path $packageDir 'SHA256SUMS.txt') -Encoding ascii
 Write-Output "Portable ZIP: $zipPath"

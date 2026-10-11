@@ -42,6 +42,7 @@ var wordbook: Node
 var result_provider := "youdao"
 var current_example: Dictionary = {}
 var _startup_overlay: Node
+var _automatic_request_active := false
 
 func _ready() -> void:
 	_startup_overlay = get_node_or_null("/root/Startup")
@@ -62,7 +63,7 @@ func _ready() -> void:
 	debounce = Timer.new()
 	debounce.one_shot = true
 	debounce.wait_time = 0.5
-	debounce.timeout.connect(request_translation)
+	debounce.timeout.connect(_on_auto_translation_timeout)
 	add_child(debounce)
 	LuaSingleton.configure_translator_settings(Code.get_theme_font("font"))
 	_startup_trace("services_ready")
@@ -126,6 +127,8 @@ func _ready() -> void:
 		call_deferred("_run_startup_wrap_test")
 	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--native-startup-test"):
 		add_child(load("res://tests/native_startup_regression.gd").new())
+	if OS.get_cmdline_user_args().has("--test") and OS.get_cmdline_user_args().has("--editing-test"):
+		add_child(load("res://tests/editing_regression.gd").new())
 	set_meta("ready_ms", Time.get_ticks_msec())
 
 func _run_startup_wrap_test() -> void:
@@ -184,6 +187,10 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if not event is InputEventKey or not event.pressed: return
+	# Caret navigation is input activity, but it is not a new translation.
+	# Handle repeats too, without consuming the event needed by CodeEdit.
+	if event.keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_HOME, KEY_END, KEY_PAGEUP, KEY_PAGEDOWN] and Code.has_focus() and Code.active_overlay == null:
+		on_caret_navigation()
 	if event.echo:
 		if is_instance_valid(wordbook) and wordbook.is_active() and wordbook.panel.handle_key(event): get_viewport().set_input_as_handled()
 		return
@@ -276,6 +283,7 @@ func restore_input_focus() -> void:
 
 func on_source_changed() -> void:
 	if suppress_changes or showing_translation: return
+	if source_text == Code.text: return
 	if is_instance_valid(pronunciation): pronunciation.stop()
 	cancel_translation()
 	cancel_examples()
@@ -288,7 +296,25 @@ func on_source_changed() -> void:
 func on_auto_translation_changed() -> void:
 	if not is_instance_valid(debounce): return
 	debounce.stop()
+	if not auto_translate and _automatic_request_active: cancel_translation()
 	if auto_translate and not source_text.strip_edges().is_empty() and not showing_translation: debounce.start()
+
+func on_translation_delay_changed(milliseconds: int) -> void:
+	if not is_instance_valid(debounce): return
+	var pending := not debounce.is_stopped()
+	debounce.wait_time = float(clampi(milliseconds, 100, 5000)) / 1000.0
+	if pending: debounce.start()
+
+func on_caret_navigation() -> void:
+	if not auto_translate or showing_translation: return
+	debounce.stop()
+	# Do not replace the source while the user is positioning their caret,
+	# even when an earlier automatic HTTP request is already in flight.
+	if _automatic_request_active: cancel_translation()
+
+func _on_auto_translation_timeout() -> void:
+	if not auto_translate or showing_translation or not Code.has_focus() or Code.active_overlay != null or Code.node_is_transitioning: return
+	request_translation(true)
 
 func cancel_examples() -> void:
 	example_revision += 1
@@ -340,6 +366,7 @@ func cancel_translation() -> void:
 	translation_generation += 1
 	busy = false
 	active_translation_key = ""
+	_automatic_request_active = false
 	if is_instance_valid(service) and service.has_method("cancel"): service.cancel()
 
 func show_examples(token: int) -> void:
@@ -356,7 +383,7 @@ func show_examples(token: int) -> void:
 	current_example = {"english": str(example.english), "chinese": str(result.text)}
 	example_label.show_example(example.english, str(result.text))
 
-func request_translation() -> void:
+func request_translation(automatic: bool = false) -> void:
 	debounce.stop()
 	if not showing_translation: source_text = Code.text
 	if source_text.strip_edges().is_empty(): return
@@ -371,7 +398,9 @@ func request_translation() -> void:
 	var value := source_text
 	var request_key := JSON.stringify([service.provider, source, target, value])
 	# Repeated Ctrl+Enter joins the current snapshot without restarting its HTTP.
-	if busy and active_translation_key == request_key: return
+	if busy and active_translation_key == request_key:
+		if not automatic: _automatic_request_active = false
+		return
 	if busy: cancel_translation()
 	last_error = ""
 	if source == target:
@@ -385,6 +414,7 @@ func request_translation() -> void:
 	translation_generation += 1
 	var token := translation_generation
 	busy = true
+	_automatic_request_active = automatic
 	active_translation_key = request_key
 	var result: Dictionary
 	if service.has_method("translate_text"):
@@ -395,8 +425,10 @@ func request_translation() -> void:
 	# the new request's busy state or apply an obsolete translation/error.
 	if token != translation_generation: return
 	busy = false
+	_automatic_request_active = false
 	active_translation_key = ""
 	if request_revision != revision or result.get("cancelled", false): return
+	if automatic and (not auto_translate or not Code.has_focus() or Code.active_overlay != null or Code.node_is_transitioning): return
 	if not result.get("ok", false):
 		last_error = str(result.get("error", "翻译服务暂不可用。Ctrl+Enter 重试。"))
 		if not last_error.is_empty(): warn(last_error)

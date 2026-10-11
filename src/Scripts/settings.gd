@@ -24,6 +24,9 @@ func panel_duration() -> float:
 	return 0.2 / animation_speed
 
 func _ready() -> void:
+	# The inherited focus box outlines this 44,630-unit canvas. Its right
+	# edge becomes a screen-height white line when wrapping narrows the editor.
+	add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	grab_focus()
 
 	LuaSingleton.on_theme_load.connect(setup_theme)
@@ -119,6 +122,7 @@ func toggle(node: Object, apply_background: bool = true, factor: float = (18 * 7
 	if active_overlay != node and active_overlay != null: return # we already have an overlay active, and this function call isn't from it trying to hide, so fuck off
 	if active_overlay == node && !_show: return # if the active overlay is the node trying to toggle, and it wants to show even tho it's already shown, it shall fuck off
 	if node_is_transitioning: return # node is already trying to go, stop spamming the keys; DO NOT FUCKING REMOVE.
+	if not _show: editor.on_caret_navigation()
 	if node == %Settings:
 		%SettingsList.release_slider_interactions()
 		%SettingsList.set_sliders_interactive(false)
@@ -262,9 +266,9 @@ func _process(_event):
 	# Shortcut dispatch is centralized in FileManager.
 	pass
 
-func _on_gui_input(_event):
-	# Shortcut dispatch is centralized in FileManager; original animations above are unchanged.
-	pass
+func _on_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		editor.on_caret_navigation()
 
 func _on_caret_changed() -> void:
 	pass
